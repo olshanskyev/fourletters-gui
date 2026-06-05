@@ -1,0 +1,18 @@
+    <mat-sidenav-container class="h-full default-gradient-background pattern-overlay">
+        <mat-sidenav
+            #sidenav
+            class="h-full auto-width"
+            [mode]="isOver() ? 'over' : 'side'"
+            (closed)="onSidenavClosed()"
+            position="end"
+            [autoFocus]="false"
+        >
+            @if (sidePanelService.component()) {
+                <ng-container *ngComponentOutlet="sidePanelService.component()!" />
+            }
+        </mat-sidenav>
+
+        <mat-sidenav-content #content class="bg-transparent">
+            <router-outlet />
+        </mat-sidenav-content>
+    </mat-sidenav-container>

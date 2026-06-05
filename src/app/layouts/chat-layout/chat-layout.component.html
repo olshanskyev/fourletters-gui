@@ -1,0 +1,17 @@
+<header class="sticky-header bg-transparent">
+  <div class="layout-content-wrapper h-full">
+    <ng-content select="[header]" />
+  </div>
+</header>
+
+<div class="scroll-container overflow-y-auto custom-scrollbar">
+  <main class="main-body bg-transparent layout-content-wrapper h-full">
+    <ng-content select="[body]" />
+  </main>
+</div>
+
+<footer class="fixed-bottom bg-transparent">
+  <div class="layout-content-wrapper">
+    <ng-content select="[bottom]" />
+  </div>
+</footer>

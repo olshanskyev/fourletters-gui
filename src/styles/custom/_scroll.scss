@@ -1,0 +1,34 @@
+@media (pointer: fine) {
+  .custom-scrollbar {
+    --scrollbar-thumb-color: color-mix(in srgb, var(--mat-sys-outline), transparent 100%);
+  }
+
+  .custom-scrollbar:hover {
+    --scrollbar-thumb-color: color-mix(in srgb, var(--mat-sys-outline), transparent 40%);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-color);
+    border-radius: 10px;
+    transition: background 0.2s ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--mat-sys-outline);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

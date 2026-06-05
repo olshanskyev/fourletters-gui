@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  height: 100%;
+
+  --primary-color: color-mix(in srgb, var(--mat-sys-primary), transparent 15%);
+}
+
+.conversation-item {
+  cursor: pointer;
+  //border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.5rem;
+
+  &:hover {
+    background-color: var(--mat-sys-surface-container);
+  }
+
+  &.active-chat {
+    color: var(--mat-sys-on-primary);
+    background-color: var(--primary-color);
+  }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    margin-right: 1rem;
+    background-color: var(--mat-sys-secondary-container);
+    border-radius: 50%;
+  }
+}

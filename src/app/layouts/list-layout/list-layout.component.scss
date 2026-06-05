@@ -1,0 +1,22 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--mat-sys-background);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.main-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background-color: var(--mat-sys-surface);
+}

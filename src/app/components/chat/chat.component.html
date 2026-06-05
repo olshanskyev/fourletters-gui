@@ -1,0 +1,62 @@
+<app-chat-layout>
+  @if (conversationId()) {
+    <div header class="m-t-8">
+      <div class="chat-header d-flex justify-content-between align-items-center p-x-4">
+        <div class="gap-8 d-flex align-items-center">
+          @if (showBackButton()) {
+            <button matIconButton routerLink="/m">
+              <mat-icon>arrow_back</mat-icon>
+            </button>
+          }
+          <button matButton (click)="openChatDetails()">Chat {{ conversationId() }}</button>
+        </div>
+        <div>
+          <button matIconButton>
+            <mat-icon>more_vert</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+    <div body class="h-full">
+      @if (!conversationId()) {
+        <div class="notification-container">
+          <p>Select a conversation to start messaging</p>
+        </div>
+      } @else {
+        @if (messages.length > 0) {
+          <div class="d-flex flex-col justify-content-end gap-8 p-b-4 h-full">
+            @for (msg of messages; track msg.id) {
+              <div
+                class="message-bubble"
+                [class]="{'mine': msg.isMine, 'theirs': !msg.isMine}">
+                {{ msg.text }}
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="notification-container">
+            <p>No messages yet</p>
+          </div>
+        }
+      }
+    </div>
+
+    @if (conversationId()) {
+      <div bottom class="m-b-8">
+        <mat-form-field class="w-full message-input" appearance="outline" subscriptSizing="dynamic">
+            <textarea matInput
+              rows="1"
+              cdkTextareaAutosize
+              cdkAutosizeMaxRows="5"
+              placeholder="Message"
+            ></textarea>
+
+            <button matSuffix matIconButton class="m-r-4">
+              <mat-icon>send</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+    }
+</app-chat-layout>

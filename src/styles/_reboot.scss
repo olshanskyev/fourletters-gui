@@ -1,0 +1,29 @@
+:root {
+  --body-font-family: 'Roboto', 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial,
+    'Lucida Grande', sans-serif;
+  --body-background-color: var(--mat-sys-surface-container);
+}
+
+*,
+::after,
+::before {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  position: relative; // 1
+  min-height: 100%;
+  overscroll-behavior-x: none;
+  background-color: var(--body-background-color);
+}
+
+body {
+  margin: 0;
+  font-family: var(--body-font-family);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}

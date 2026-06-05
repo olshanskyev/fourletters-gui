@@ -1,0 +1,11 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.large-avatar {
+  width: 96px;
+  height: 96px;
+  background-color: var(--mat-sys-primary);
+  border-radius: 50%;
+}

@@ -1,0 +1,52 @@
+@use '@angular/material' as mat;
+
+:host {
+  display: block;
+  height: 100%;
+}
+
+app-chat-layout {
+  --layout-max-width: 700px;
+}
+
+.chat-header {
+  height: 3rem;
+  background-color: var(--mat-sys-background);
+  border-radius: var(--mat-sys-corner-full);
+}
+
+.message-bubble {
+  max-width: 80%;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--mat-sys-corner-large);
+
+  &.mine {
+    align-self: flex-end;
+    color: var(--mat-sys-on-primary);
+    background-color: var(--mat-sys-primary);
+    border-bottom-right-radius: 0;
+  }
+
+  &.theirs {
+    align-self: flex-start;
+    color: var(--mat-sys-on-secondary);
+    background-color: var(--mat-sys-secondary);
+    border-bottom-left-radius: 0;
+  }
+}
+
+.notification-container {
+  position: relative;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  font-style: italic;
+  color: var(--mat-sys-on-primary);
+  text-align: center;
+  background-color: color-mix(in srgb, var(--mat-sys-primary), transparent 50%);
+  border-radius: var(--mat-sys-corner-large);
+  transform: translate(-50%, -50%);
+}

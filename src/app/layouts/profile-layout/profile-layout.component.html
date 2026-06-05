@@ -1,0 +1,14 @@
+<div class="overflow-y-auto custom-scrollbar">
+  <header class="sticky-header sticky">
+    <ng-content select="[header]" />
+  </header>
+  <div class="flex-shrink-0">
+    <ng-content select="[lead-body]" />
+  </div>
+  <div class="sticky-mid-shell sticky">
+    <ng-content select="[sticky-mid]" />
+  </div>
+  <div class="flex-grow-1">
+    <ng-content select="[trailing-body]" />
+  </div>
+</div>

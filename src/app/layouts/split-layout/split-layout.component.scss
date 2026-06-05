@@ -1,0 +1,23 @@
+:host {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  overflow: hidden;
+  background-color: transparent !important;
+}
+
+.master-pane {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  width: 400px;
+  background-color: var(--mat-sys-background);
+  border-right: 1px solid var(--mat-sys-outline-variant);
+}
+
+.detail-pane {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}

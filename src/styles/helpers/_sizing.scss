@@ -1,0 +1,24 @@
+@use 'variables';
+
+$utilities: (
+  'width': (
+    property: width,
+    class: w,
+    values: variables.$sizes
+  ),
+  'height': (
+    property: height,
+    class: h,
+    values: variables.$sizes
+  ),
+  'min-width': (
+    property: min-width,
+    class: min-w,
+    values: variables.$sizes
+  ),
+  'min-height': (
+    property: min-height,
+    class: min-h,
+    values: variables.$sizes
+  )
+);

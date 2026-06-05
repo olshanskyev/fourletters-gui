@@ -1,0 +1,23 @@
+@use '../../../styles/grid/breakpoints' as bp;
+
+:host {
+  display: block;
+  height: 100%;
+}
+
+.mobile-only {
+  @include bp.bp-gt(medium) {
+    display: none;
+  }
+}
+
+.desktop-only {
+  display: none;
+  @include bp.bp-gt(medium) {
+    display: block;
+  }
+}
+
+.detail-wrapper {
+  background-color: var(--mat-sys-surface-container-low);
+}

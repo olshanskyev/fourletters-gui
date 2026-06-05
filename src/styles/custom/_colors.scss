@@ -1,0 +1,32 @@
+:root {
+    --second-color: var(--mat-sys-outline);
+    --inactive-color: var(--mat-sys-outline-variant);
+}
+
+.text-color-inactive {
+  color: var(--inactive-color) !important;
+}
+
+.border-color-inactive {
+  border-color: var(--inactive-color) !important;
+}
+
+.bg-color-inactive {
+  background-color: var(--inactive-color) !important;
+}
+
+.text-color-second {
+  color: var(--second-color) !important;
+}
+
+.border-color-second {
+  border-color: var(--second-color) !important;
+}
+
+.bg-color-second {
+  background-color: var(--second-color) !important;
+}
+
+.text-color-primary {
+  color: var(--mat-sys-primary) !important;
+}

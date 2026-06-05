@@ -1,0 +1,46 @@
+:root {
+  --header-height: 56px;
+}
+
+.default-gradient-background {
+  position: relative;
+  background-color: var(--mat-sys-surface-container-lowest);
+  background-image:
+    radial-gradient(
+      circle at top right,
+      var(--mat-sys-primary-container) 0%,
+      transparent 85%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      var(--mat-sys-primary-container) 0%,
+      transparent 85%
+  );
+  isolation: isolate;
+}
+
+.pattern-overlay::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background-color: var(--mat-sys-outline-variant);
+  mask-image: var(--bg-pattern, linear-gradient(transparent, transparent));
+
+  /* Hardware acceleration to prevent expensive repaints of the mask during animations */
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.default-header {
+  display: flex;
+  align-items: center;
+  height: var(--header-height);
+  padding: 0.5rem;
+
+  h3 {
+    margin: 0;
+  }
+}
+

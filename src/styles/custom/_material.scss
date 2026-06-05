@@ -1,0 +1,35 @@
+@use '@angular/material' as mat;
+
+/** Rewrite Material styles */
+.form-field-5 {
+  @include mat.form-field-density(-5);
+}
+
+mat-form-field.message-input {
+  @include mat.form-field-density(-3);
+
+  &:has(textarea.mat-mdc-input-element:not([style*="height: 24px"])) {
+    .mat-mdc-form-field-icon-suffix {
+      place-self: end !important;
+      padding-bottom: 0.25rem;
+    }
+  }
+
+  background-color: var(--mat-sidenav-content-background-color, var(--mat-sys-background));
+  border-radius: var(--mat-sys-corner-extra-large);
+
+  @include mat.form-field-overrides((
+    outlined-outline-color: transparent,
+    outlined-hover-outline-color: transparent,
+    outlined-focus-outline-color: transparent,
+    outlined-disabled-outline-color: transparent,
+    outlined-input-text-placeholder-color: var(--inactive-color),
+  ));
+}
+
+.form-field-w-full {
+  .mat-mdc-form-field {
+    width: 100%;
+  }
+}
+

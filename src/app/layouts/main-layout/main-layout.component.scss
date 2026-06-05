@@ -1,0 +1,31 @@
+@use '../../../styles/grid/breakpoints' as bp;
+
+:host {
+  display: block;
+  height: 100vh;
+  height: 100dvh;
+
+  --bg-pattern: url('/backgrounds/space.svg');
+  --mat-sidenav-container-divider-color: var(--mat-sys-outline-variant);
+  --mat-sidenav-container-shape: 0;
+  --mat-sidenav-container-width: 400px;
+}
+
+mat-sidenav-container {
+  background-color: transparent !important;
+}
+
+mat-sidenav-content {
+  background-color: transparent !important;
+  will-change: margin-right;
+}
+
+.bg-transparent {
+  background-color: transparent !important;
+}
+
+.auto-width {
+  @include bp.bp-lt(small) {
+    width: 100%;
+  }
+}
