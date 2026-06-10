@@ -43,3 +43,7 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# openapi
+openapitools.json
+src/app/core/.openapi-generator

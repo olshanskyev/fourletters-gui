@@ -1,26 +1,34 @@
-import { Component, inject } from '@angular/core';
-import { MatButtonModule } from '@angular/material/button';
+import { AfterViewInit, Component, ElementRef, inject, viewChild } from '@angular/core';
+import { MatCardModule } from '@angular/material/card';
+import { MatInputModule } from '@angular/material/input';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { MatDividerModule } from '@angular/material/divider';
-import { MatIconModule } from '@angular/material/icon';
-import { MatCardModule } from '@angular/material/card';
-import { RouterLink } from '@angular/router';
-import { AuthService } from '../../core';
+import { GoogleAuthService, VKAuthService } from '../../core/services';
 
 @Component({
   selector: 'app-home',
   templateUrl: './home.component.html',
+  styleUrls: ['./home.component.scss'],
   imports: [
-    MatButtonModule,
-    MatDividerModule,
-    MatIconModule,
-    TranslateModule,
     MatCardModule,
-    RouterLink
+    MatInputModule,
+    TranslateModule
   ],
-
 })
-export class HomeComponent {
-  authService = inject(AuthService);
+export class HomeComponent implements AfterViewInit {
+
+  private readonly vkService = inject(VKAuthService);
+  private readonly googleService = inject(GoogleAuthService);
+
+  vkButtonContainer = viewChild<ElementRef>('vkButtonContainer');
+  googleButtonContainer = viewChild<ElementRef>('googleButtonContainer');
+
+  ngAfterViewInit(): void {
+    if (this.vkButtonContainer()) {
+      this.vkService.renderOneTap(this.vkButtonContainer()!, {width: 300});
+    }
+    if (this.googleButtonContainer()) {
+      this.googleService.renderOneTap(this.googleButtonContainer()!, {width: 300});
+    }
+  }
 }

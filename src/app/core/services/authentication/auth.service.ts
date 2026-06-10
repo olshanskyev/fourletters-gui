@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TokenService } from './token.service';
 
 import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpStatusCode } from '@angular/common/http';
 import { VKAuthService, VKTokenResult } from './onetap/vk-auth.service';
 import { GoogleAuthService, GoogleTokenResult } from './onetap/google-auth.service';
 
@@ -102,7 +102,17 @@ export class AuthService {
 
     this.refreshInFlight$ = source.pipe(
       take(1),
-      catchError(() => of(undefined)),
+      catchError((error: unknown) => {
+        // not clear session in case server is unavailable,
+        // to prevent user from being logged out due to temporary network issues
+        if (error instanceof HttpErrorResponse &&
+            error.status === HttpStatusCode.Unauthorized) {
+            this.settings.setSessionId(undefined);
+        }
+        this.tokenService.clear();
+        this._user.set(undefined);
+        return of(undefined);
+      }),
       tap(authResponse => {
         if (authResponse) {
           this.handlePositiveAuthResponse(authResponse);
