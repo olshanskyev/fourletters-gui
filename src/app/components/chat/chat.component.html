@@ -51,9 +51,10 @@
               cdkTextareaAutosize
               cdkAutosizeMaxRows="5"
               placeholder="Message"
+              [(ngModel)]="messageText"
             ></textarea>
 
-            <button matSuffix matIconButton class="m-r-4">
+            <button matSuffix matIconButton class="m-r-4" (click)="sendMessage()">
               <mat-icon>send</mat-icon>
           </button>
         </mat-form-field>

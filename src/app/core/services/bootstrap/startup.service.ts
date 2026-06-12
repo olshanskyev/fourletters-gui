@@ -4,6 +4,7 @@ import { catchError, of, Observable, distinctUntilChanged } from 'rxjs';
 import { toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
+import { HubService } from '../ws/hub.service';
 import { UserResponse } from '../../dto/userResponse';
 
 
@@ -13,6 +14,7 @@ import { UserResponse } from '../../dto/userResponse';
 export class StartupService {
   private readonly authService = inject(AuthService);
   private readonly rolesService = inject(NgxRolesService);
+  private readonly hubService = inject(HubService);
   private readonly destroyRef = inject(DestroyRef);
 
   private currentUser$!: Observable<UserResponse | undefined>;
@@ -41,7 +43,14 @@ export class StartupService {
                 distinctUntilChanged((prev, curr) => prev?.id === curr?.id),
                 takeUntilDestroyed(this.destroyRef)
               )
-              .subscribe(user => this.setPermissions(user));
+              .subscribe(user => {
+                this.setPermissions(user);
+                if (user) {
+                  this.hubService.connect();
+                } else {
+                  this.hubService.disconnect();
+                }
+              });
 
             resolve();
           },

@@ -1,5 +1,5 @@
 /**
- * Fourletters API - Authentication
+ * Shared Data Models for Fourletters API
  *
  * 
  *

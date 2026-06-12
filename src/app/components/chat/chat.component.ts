@@ -1,4 +1,4 @@
-import { Component, OnInit, OnChanges, inject, input } from '@angular/core';
+import { Component, OnInit, OnChanges, inject, input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatLayoutComponent } from '../../layouts/chat-layout/chat-layout.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -9,6 +9,8 @@ import { SidePanelService } from '../../core/services/shared/side-panel.service'
 import { ChatDetailsComponent } from './chat-details/chat-details.component';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { HubService } from '../../core';
 
 @Component({
   selector: 'app-chat',
@@ -16,6 +18,7 @@ import { RouterLink } from '@angular/router';
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.scss'],
   imports: [
+    FormsModule,
     CommonModule,
     ChatLayoutComponent,
     MatFormFieldModule,
@@ -23,16 +26,18 @@ import { RouterLink } from '@angular/router';
     MatButtonModule,
     TextFieldModule,
     MatIconModule,
-    RouterLink
+    RouterLink,
   ]
 })
 export class ChatComponent implements OnInit, OnChanges {
   sidePanelService = inject(SidePanelService);
+  hubService = inject(HubService);
 
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
 
   messages: any[] = [];
+  messageText = signal<string>('');
 
   // Static dummy data for demonstration
   private allMessages: Record<string, any[]> = {
@@ -83,5 +88,8 @@ export class ChatComponent implements OnInit, OnChanges {
 
   openChatDetails() {
     this.sidePanelService.open(ChatDetailsComponent);
+  }
+  sendMessage() {
+    this.hubService.sendMessage('4723d731-cfef-47d2-8a5a-f039552c7601', this.messageText());
   }
 }

@@ -15,7 +15,7 @@
     "lint:ts": "eslint . --fix",
     "lint:scss": "stylelint \"src/**/*.scss\" --fix",
     "format": "prettier \"src/**/*.{ts,html,scss}\" --write",
-    "dto:gen": "openapi-generator-cli generate -i ../fourletters-meta/doc/openapi_server.json -g typescript-angular -o src/app/core --model-package dto --global-property models,apis=false,supportingFiles=models.ts"
+    "dto:gen": "openapi-generator-cli generate -i ../fourletters-meta/doc/models.json -g typescript-angular -o src/app/core --model-package dto --global-property models,apis=false,supportingFiles=models.ts --additional-properties=stringEnums=true"
   },
   "prettier": {
     "printWidth": 100,

@@ -7,14 +7,12 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { UserResponse } from './userResponse';
 
 
-export interface AuthResponse { 
+export interface MessageAcknowledgement { 
     /**
-     * The short-lived JWT Access Token.
+     * ID of the message being acknowledged
      */
-    access_token: string;
-    user: UserResponse;
+    messageId: string;
 }
 

@@ -1,5 +1,5 @@
 /**
- * Fourletters API - Authentication
+ * Shared Data Models for Fourletters API
  *
  * 
  *
@@ -16,6 +16,6 @@ export interface UserResponse {
     /**
      * List of user permissions/roles for RBAC.
      */
-    roles: string[];
+    roles: Array<string>;
 }
 

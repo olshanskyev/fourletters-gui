@@ -5,6 +5,7 @@
 export const environment = {
   production: false,
   baseUrlServer: 'https://localhost:8080/server/api/v1',
+  baseUrlHub: 'wss://localhost:8081/hub/api/v1',
   useHash: false,
   vkAppId: 54614547,
   googleClientId: '74177348869-n3k7043tjn1blpaluf67elnsb9ilmtr7.apps.googleusercontent.com',

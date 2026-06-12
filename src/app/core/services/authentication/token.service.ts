@@ -10,6 +10,7 @@ export class TokenService implements OnDestroy, TokenReader {
   private readonly _currentToken = signal<JwtToken | undefined>(undefined);
   private readonly isValid = computed(() => this._currentToken()?.valid() ?? false);
   private readonly bearerToken = computed(() => this._currentToken()?.getBearerToken() ?? '');
+  private readonly accessToken = computed(() => this._currentToken()?.access_token ?? '');
 
   private readonly refresh$ = new Subject<JwtToken | undefined>();
 
@@ -63,5 +64,6 @@ export class TokenService implements OnDestroy, TokenReader {
 
   isTokenValid(): boolean { return this.isValid(); }
   getBearerToken(): string { return this.bearerToken(); }
+  getAccessToken(): string { return this.accessToken(); }
 
 }

@@ -7,14 +7,11 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { UserResponse } from './userResponse';
+import { MessageAcknowledgement } from './messageAcknowledgement';
 
 
-export interface AuthResponse { 
-    /**
-     * The short-lived JWT Access Token.
-     */
-    access_token: string;
-    user: UserResponse;
+export interface MessageReadPayload { 
+    event: string;
+    data: MessageAcknowledgement;
 }
 
