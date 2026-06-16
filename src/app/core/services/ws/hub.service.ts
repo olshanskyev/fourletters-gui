@@ -5,9 +5,10 @@ import { environment } from '../../../../environments/environment';
 import { AuthService } from '../authentication/auth.service';
 import { EncryptedMessage } from '../../dto/encryptedMessage';
 
-import { AckMessagePayload, AckMessagePayloadActionEnum, ReceiveMessagePayload, SendMessagePayload, SendMessagePayloadActionEnum } from '../../dto/models';
+import { AckMessagePayload, AckMessagePayloadActionEnum, ReceiveMessagePayload, ReceiveMessagePayloadEventEnum, SendMessagePayload, SendMessagePayloadActionEnum, MessageDispatchedPayload, MessageDispatchedPayloadEventEnum, MessageReadPayload, MessageReadPayloadEventEnum } from '../../dto/models';
+import { EventMessageReceipt } from '../../dto/eventMessageReceipt';
 
-export type HubMessage = ReceiveMessagePayload | SendMessagePayload | AckMessagePayload;
+export type HubMessage = ReceiveMessagePayload | SendMessagePayload | AckMessagePayload | MessageDispatchedPayload | MessageReadPayload;
 
 @Injectable({
   providedIn: 'root'
@@ -15,7 +16,10 @@ export type HubMessage = ReceiveMessagePayload | SendMessagePayload | AckMessage
 export class HubService implements OnDestroy {
   private authService = inject(AuthService);
   private socket$?: WebSocketSubject<HubMessage>;
+
   private readonly messagesSubject = new Subject<EncryptedMessage>();
+  private readonly messageDispatchedSubject = new Subject<EventMessageReceipt>();
+  private readonly messageReadSubject = new Subject<EventMessageReceipt>();
 
   public connect(): void {
     if (this.socket$ && !this.socket$.closed) {
@@ -35,8 +39,18 @@ export class HubService implements OnDestroy {
 
     this.socket$.subscribe({
       next: (message) => {
-        if ('event' in message && message.event === 'messageReceived') {
-          this.messagesSubject.next(message.data);
+        if ('event' in message) {
+          switch (message.event) {
+            case ReceiveMessagePayloadEventEnum.MessageReceived:
+              this.messagesSubject.next(message.data as EncryptedMessage);
+              break;
+            case MessageDispatchedPayloadEventEnum.MessageDispatched:
+              this.messageDispatchedSubject.next(message.data as EventMessageReceipt);
+              break;
+            case MessageReadPayloadEventEnum.MessageRead:
+              this.messageReadSubject.next(message.data as EventMessageReceipt);
+              break;
+          }
         }
       },
       error: (err) => console.error('Hub WebSocket error:', err),
@@ -46,6 +60,14 @@ export class HubService implements OnDestroy {
 
   public get messages(): Observable<EncryptedMessage> {
     return this.messagesSubject.asObservable();
+  }
+
+  public get messageDispatched(): Observable<EventMessageReceipt> {
+    return this.messageDispatchedSubject.asObservable();
+  }
+
+  public get messageRead(): Observable<EventMessageReceipt> {
+    return this.messageReadSubject.asObservable();
   }
 
   public sendMessage(recipientId: string, plainTextPayload: string): void {
@@ -69,11 +91,11 @@ export class HubService implements OnDestroy {
     } as SendMessagePayload);
   }
 
-  public ackMessage(messageId: string): void {
+  public ackMessage(messageId: string, senderId: string): void {
     if (this.socket$) {
       this.socket$.next({
         action: AckMessagePayloadActionEnum.AckMessage,
-        data: { messageId }
+        data: { messageId, senderId }
       } as AckMessagePayload);
     } else {
       console.warn('Cannot ack message: Hub WebSocket is not connected');

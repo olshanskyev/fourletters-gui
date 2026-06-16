@@ -44,6 +44,7 @@
     "@ngx-translate/http-loader": "^17.0.0",
     "@ngxpert/hot-toast": "5.1.1",
     "@vkid/sdk": "^2.6.5",
+    "dexie": "^4.4.3",
     "google-one-tap": "^1.0.6",
     "ngx-permissions": "^19.0.0",
     "ngx-progressbar": "^14.0.0",

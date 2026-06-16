@@ -9,9 +9,9 @@
  */
 
 
-export interface MessageAcknowledgement { 
+export interface EventMessageReceipt { 
     /**
-     * ID of the message being acknowledged
+     * ID of the outgoing message that triggered the event (dispatch or read)
      */
     messageId: string;
 }

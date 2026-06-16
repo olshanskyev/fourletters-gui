@@ -7,12 +7,12 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { MessageAcknowledgement } from './messageAcknowledgement';
+import { ClientMessageAck } from './clientMessageAck';
 
 
 export interface AckMessagePayload { 
     action: AckMessagePayloadActionEnum;
-    data: MessageAcknowledgement;
+    data: ClientMessageAck;
 }
 export enum AckMessagePayloadActionEnum {
     AckMessage = 'ackMessage'

@@ -7,11 +7,16 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { MessageAcknowledgement } from './messageAcknowledgement';
+import { EventMessageReceipt } from './eventMessageReceipt';
 
 
 export interface MessageReadPayload { 
-    event: string;
-    data: MessageAcknowledgement;
+    event: MessageReadPayloadEventEnum;
+    data: EventMessageReceipt;
 }
+export enum MessageReadPayloadEventEnum {
+    MessageRead = 'messageRead'
+};
+
+
 

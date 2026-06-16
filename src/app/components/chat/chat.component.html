@@ -25,9 +25,9 @@
           <p>Select a conversation to start messaging</p>
         </div>
       } @else {
-        @if (messages.length > 0) {
+        @if (messages().length > 0) {
           <div class="d-flex flex-col justify-content-end gap-8 p-b-4 h-full">
-            @for (msg of messages; track msg.id) {
+            @for (msg of messages(); track msg.id) {
               <div
                 class="message-bubble"
                 [class]="{'mine': msg.isMine, 'theirs': !msg.isMine}">

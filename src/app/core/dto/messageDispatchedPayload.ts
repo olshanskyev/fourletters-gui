@@ -7,11 +7,16 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { MessageAcknowledgement } from './messageAcknowledgement';
+import { EventMessageReceipt } from './eventMessageReceipt';
 
 
 export interface MessageDispatchedPayload { 
-    event: string;
-    data: MessageAcknowledgement;
+    event: MessageDispatchedPayloadEventEnum;
+    data: EventMessageReceipt;
 }
+export enum MessageDispatchedPayloadEventEnum {
+    MessageDispatched = 'messageDispatched'
+};
+
+
 

@@ -6,7 +6,7 @@ import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
 import { HubService } from '../ws/hub.service';
 import { UserResponse } from '../../dto/userResponse';
-
+import { MessagesService } from '../messages/messages.service';
 
 @Injectable({
   providedIn: 'root',
@@ -15,6 +15,7 @@ export class StartupService {
   private readonly authService = inject(AuthService);
   private readonly rolesService = inject(NgxRolesService);
   private readonly hubService = inject(HubService);
+  private readonly messagesService = inject(MessagesService); // Instantiates background listeners
   private readonly destroyRef = inject(DestroyRef);
 
   private currentUser$!: Observable<UserResponse | undefined>;

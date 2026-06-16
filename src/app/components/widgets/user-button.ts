@@ -12,7 +12,7 @@ import { AuthService } from '../../core';
   selector: 'app-user-button',
   template: `
     <button matIconButton [matMenuTriggerFor]="menu" class="user-button">
-      <img [src]="user()?.avatarUrl" width="24" alt="avatar" />
+      <img [src]="user()?.avatarUrl" width="24" alt="avatar" referrerpolicy="no-referrer" />
     </button>
 
     <mat-menu #menu="matMenu">
