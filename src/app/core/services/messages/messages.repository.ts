@@ -17,6 +17,13 @@ export class MessagesRepository {
   }
 
   /**
+   * Update a single message
+   */
+  async updateMessage(message: LocalMessage): Promise<void> {
+    await db.messages.put(message);
+  }
+
+  /**
    * Bulk insert messages
    */
   async saveMessages(messages: LocalMessage[]): Promise<void> {
@@ -30,6 +37,16 @@ export class MessagesRepository {
     return db.messages
       .where('conversationId').equals(conversationId)
       .sortBy('createdAt');
+  }
+
+  /**
+   * Get all unconfirmed messages (both pending and accepted by the server but not yet delivered)
+   */
+  async getUnconfirmedMessages(): Promise<LocalMessage[]> {
+    return db.messages
+      .where('status').anyOf('pending', 'accepted')
+      .filter(m => m.isMine === true)
+      .toArray();
   }
 
   /**

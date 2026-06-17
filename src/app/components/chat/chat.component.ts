@@ -14,6 +14,10 @@ import { MessagesService } from '../../core/services/messages';
 import { MessagesApiService } from '../../core/services/messages/messages-api.service';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, of } from 'rxjs';
+import { SettingsService } from '../../core';
+import { LocalMessage } from '../../core/services/messages/models/messages.model';
+import { ObserveVisibilityDirective } from './observe-visibility.directive';
+import { DeliveryReceiptTypeEnum } from '../../core/dto/deliveryReceipt';
 
 @Component({
   selector: 'app-chat',
@@ -30,6 +34,7 @@ import { switchMap, of } from 'rxjs';
     TextFieldModule,
     MatIconModule,
     RouterLink,
+    ObserveVisibilityDirective,
   ]
 })
 export class ChatComponent {
@@ -38,7 +43,8 @@ export class ChatComponent {
   messagesApi = inject(MessagesApiService);
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
-
+  settingsService = inject(SettingsService);
+  locale = this.settingsService.locale;
   messages = toSignal(
     toObservable(this.conversationId).pipe(
       switchMap(id => {
@@ -62,13 +68,23 @@ export class ChatComponent {
     const text = this.messageText();
     if (!convoId || !text) return;
 
-    // Save to IndexedDB first so the message shows immediately (updates UI via signals).
-    const message = await this.messagesService.saveMessage(convoId, text, true);
-
-    this.messagesApi.sendMessage(convoId, text, message.id).subscribe({
-      error: (err) => console.error('Failed to send message:', err)
-    });
+    await this.messagesService.sendMessage(convoId, text);
 
     this.messageText.set('');
+  }
+
+  onMessageVisible(msg: LocalMessage) {
+    if (!msg.isMine && msg.status !== 'read') {
+      // Mark as read locally so we don't send it again
+      msg.status = 'read';
+
+      this.messagesApi.sendReceipt(msg.id, msg.senderId,
+        DeliveryReceiptTypeEnum.Read).subscribe({
+        error: (err) => console.error('Failed to send read receipt:', err)
+      });
+
+      // Update IndexedDB via MessagesService
+      this.messagesService.markAsRead(msg);
+    }
   }
 }

@@ -48,7 +48,7 @@ export class AuthService {
     this.tokenService.set(authResponse.access_token);
     this._user.set(authResponse.user);
     const id = this.tokenService.sessionId();
-    if (id) this.settings.setSessionId(id);
+    if (id) this.settings.setOptions({ sessionId: id });
   }
 
   private auth(token: string, provider: string) {
@@ -81,7 +81,7 @@ export class AuthService {
 
 
   refresh() {
-    const sessionId = this.settings.sessionId;
+    const sessionId = this.settings.options().sessionId;
 
     if (!sessionId) {
       this.refreshInFlight$ = null;
@@ -107,7 +107,7 @@ export class AuthService {
         // to prevent user from being logged out due to temporary network issues
         if (error instanceof HttpErrorResponse &&
             error.status === HttpStatusCode.Unauthorized) {
-            this.settings.setSessionId(undefined);
+            this.settings.setOptions({ sessionId: undefined });
         }
         this.tokenService.clear();
         this._user.set(undefined);
@@ -137,7 +137,7 @@ export class AuthService {
       tap(() => {
         this.tokenService.clear();
         this._user.set(undefined);
-        this.settings.setSessionId(undefined);
+        this.settings.setOptions({ sessionId: undefined });
       }),
       map(() => !this.tokenService.isTokenValid())
     );

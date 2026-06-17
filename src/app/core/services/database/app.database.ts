@@ -9,8 +9,9 @@ export class AppDatabase extends Dexie {
   constructor() {
     super('FourLettersDB');
 
+
     this.version(1).stores({
-      messages: 'id, conversationId, createdAt',
+      messages: 'id, conversationId, createdAt, status',
       conversations: 'id, updatedAt'
     });
   }

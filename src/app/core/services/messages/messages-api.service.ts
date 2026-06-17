@@ -6,6 +6,8 @@ import { EncryptedMessage } from '../../dto/encryptedMessage';
 import { AcceptedResponse } from '../../dto/acceptedResponse';
 import { InboxResponse } from '../../dto/inboxResponse';
 import { DeliveryReceipt, DeliveryReceiptTypeEnum } from '../../dto/deliveryReceipt';
+import { MessageBatchRequest } from '../../dto/messageBatchRequest';
+import { MessageBatchResponse } from '../../dto/messageBatchResponse';
 
 /**
  * REST client for the Server's message endpoints
@@ -34,21 +36,31 @@ export class MessagesApiService {
   }
 
   /**
-   * Sync undelivered messages from the Server-owned inbox.
-   * @param since return messages with seq strictly greater than this value
+   * Submit a batch of messages (resync)
    */
-  fetchInbox(since = 0): Observable<InboxResponse> {
-    return this.httpClient.get<InboxResponse>('/inbox', { params: { since } });
+  sendMessagesBatch(messages: EncryptedMessage[]): Observable<MessageBatchResponse> {
+    const request: MessageBatchRequest = { messages };
+    return this.httpClient.post<MessageBatchResponse>('/messages/batch', request);
+  }
+
+  /**
+   * Sync undelivered messages from the Server-owned inbox.
+   */
+  fetchInbox(): Observable<InboxResponse> {
+    return this.httpClient.get<InboxResponse>('/inbox');
   }
 
   /**
    * Acknowledge a received message with a signed delivery/read receipt (signature is a
    * placeholder for now). Receipts go to the Server, never to a Hub.
    */
-  sendReceipt(messageId: string, type: DeliveryReceiptTypeEnum = DeliveryReceiptTypeEnum.Delivered)
+  sendReceipt(messageId: string,
+    originalSenderId: string,
+    type: DeliveryReceiptTypeEnum = DeliveryReceiptTypeEnum.Delivered)
     : Observable<void> {
     const receipt: DeliveryReceipt = {
       messageId,
+      originalSenderId,
       type,
       signature: '' // placeholder until E2E signing is implemented
     };

@@ -15,11 +15,15 @@ export interface DeliveryReceipt {
      */
     messageId: string;
     /**
+     * ID of the original message\'s sender — the party to notify. Echoed by the recipient from the received message so the Server can relay this receipt 
+     */
+    originalSenderId?: string;
+    /**
      * \'delivered\' = the recipient device received and decrypted it; \'read\' = the user opened it.
      */
     type: DeliveryReceiptTypeEnum;
     /**
-     * Signature over (messageId, type) by the recipient\'s identity key (Base64). Lets the Server and the original sender trust the receipt without trusting any Hub.
+     * Signature over (messageId, type, originalSenderId) by the recipient\'s identity key (Base64). Lets the Server and the original sender trust the receipt without trusting any Hub.
      */
     signature: string;
 }

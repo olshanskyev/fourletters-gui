@@ -53,12 +53,4 @@ export class SettingsService {
     }
   }
 
-  setSessionId(sessionId: string | undefined) {
-    this.setOptions({ sessionId });
-  }
-
-  get sessionId() {
-    return this._options().sessionId;
-  }
-
 }

@@ -8,6 +8,7 @@
  * Do not edit the class manually.
  */
 import { EncryptedMessage } from './encryptedMessage';
+import { MessageReceipt } from './messageReceipt';
 
 
 export interface InboxResponse { 
@@ -15,6 +16,10 @@ export interface InboxResponse {
      * The recipient\'s undelivered messages, in arrival order.
      */
     messages: Array<EncryptedMessage>;
+    /**
+     * Pending delivery/read acknowledgements for messages this user sent, accumulated while the user was offline. Returned once and then cleared.
+     */
+    receipts?: Array<MessageReceipt>;
     /**
      * Epoch milliseconds at which this Server process started. A changed value across responses signals a restart, after which the client re-submits its unconfirmed outbox messages.
      */

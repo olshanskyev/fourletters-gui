@@ -16,9 +16,19 @@ app-chat-layout {
 }
 
 .message-bubble {
+  display: flex;
+  flex-direction: column;
   max-width: 80%;
   padding: 0.25rem 0.5rem;
   border-radius: var(--mat-sys-corner-large);
+
+  .opacity-60 {
+    opacity: 0.6;
+  }
+
+  .opacity-80 {
+    opacity: 0.8;
+  }
 
   &.mine {
     align-self: flex-end;
@@ -33,6 +43,22 @@ app-chat-layout {
     background-color: var(--mat-sys-secondary);
     border-bottom-left-radius: 0;
   }
+  .bubble-footer {
+    display: grid;
+    grid-template-columns: auto max-content;
+
+    .message-status {
+      font-size: 0.75rem;
+      font-weight: 100;
+      display: inline-flex;
+      mat-icon {
+        width: 18px !important;
+        height: 18px !important;
+        font-size: 18px !important;
+      }
+    }
+  }
+
 }
 
 .notification-container {
