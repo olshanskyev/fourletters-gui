@@ -10,11 +10,14 @@
 import { EncryptedMessage } from './encryptedMessage';
 
 
-export interface ReceiveMessagePayload { 
-    event: ReceiveMessagePayloadEventEnum;
+/**
+ * WS push: a new encrypted message relayed live by the Hub.
+ */
+export interface MessageEvent { 
+    event: MessageEventEventEnum;
     data: EncryptedMessage;
 }
-export enum ReceiveMessagePayloadEventEnum {
+export enum MessageEventEventEnum {
     MessageReceived = 'messageReceived'
 };
 

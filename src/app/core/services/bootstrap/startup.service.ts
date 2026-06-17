@@ -4,7 +4,6 @@ import { catchError, of, Observable, distinctUntilChanged } from 'rxjs';
 import { toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
-import { HubService } from '../ws/hub.service';
 import { UserResponse } from '../../dto/userResponse';
 import { MessagesService } from '../messages/messages.service';
 
@@ -14,8 +13,7 @@ import { MessagesService } from '../messages/messages.service';
 export class StartupService {
   private readonly authService = inject(AuthService);
   private readonly rolesService = inject(NgxRolesService);
-  private readonly hubService = inject(HubService);
-  private readonly messagesService = inject(MessagesService); // Instantiates background listeners
+  private readonly messagesService = inject(MessagesService);
   private readonly destroyRef = inject(DestroyRef);
 
   private currentUser$!: Observable<UserResponse | undefined>;
@@ -47,9 +45,9 @@ export class StartupService {
               .subscribe(user => {
                 this.setPermissions(user);
                 if (user) {
-                  this.hubService.connect();
+                  this.messagesService.startListening();
                 } else {
-                  this.hubService.disconnect();
+                  this.messagesService.stopListening();
                 }
               });
 

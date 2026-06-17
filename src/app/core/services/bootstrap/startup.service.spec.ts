@@ -3,6 +3,7 @@ import { ApplicationRef } from '@angular/core';
 import { StartupService } from './startup.service';
 import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
+import { MessagesService } from '../messages/messages.service';
 import { of } from 'rxjs';
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -12,6 +13,7 @@ describe('StartupService', () => {
   let service: StartupService;
   let authServiceMock: any;
   let rolesServiceMock: any;
+  let messagesServiceMock: any;
 
   beforeEach(() => {
     // Mock AuthService
@@ -21,7 +23,11 @@ describe('StartupService', () => {
         id: '123e4567-e89b-12d3-a456-426614174000',
         username: 'admin_user',
         roles: ['ADMIN']
-      } as UserResponse)
+      } as UserResponse),
+      tokenReader: {
+        getBearerToken: vi.fn().mockReturnValue('fake-token'),
+        getAccessToken: vi.fn().mockReturnValue('fake-token'),
+      }
     };
 
     // Mock NgxRolesService
@@ -30,11 +36,18 @@ describe('StartupService', () => {
       addRoleWithPermissions: vi.fn()
     };
 
+    // Mock MessagesService
+    messagesServiceMock = {
+      startListening: vi.fn(),
+      stopListening: vi.fn()
+    };
+
     TestBed.configureTestingModule({
       providers: [
         StartupService,
         { provide: AuthService, useValue: authServiceMock },
-        { provide: NgxRolesService, useValue: rolesServiceMock }
+        { provide: NgxRolesService, useValue: rolesServiceMock },
+        { provide: MessagesService, useValue: messagesServiceMock }
       ]
     });
 

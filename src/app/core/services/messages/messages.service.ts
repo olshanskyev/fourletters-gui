@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
 import { LocalMessage } from './models/messages.model';
-import { Observable } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import { ConversationsService } from '../conversations/conversations.service';
 import { HubService } from '../ws/hub.service';
+import { MessagesApiService } from './messages-api.service';
 
 @Injectable({
   providedIn: 'root'
@@ -12,18 +13,28 @@ export class MessagesService {
   private repository = inject(MessagesRepository);
   private conversationsService = inject(ConversationsService);
   private hubService = inject(HubService);
+  private messagesApi = inject(MessagesApiService);
 
-  constructor() {
-    // Listen to incoming WebSocket messages globally
-    this.hubService.messages.subscribe(async (encryptedMessage) => {
+  private incomingSubscription?: Subscription;
+
+  /**
+   * Connect to the Hub and start handling incoming live messages. Idempotent.
+   * Called once by startup service when the user is authenticated.
+   */
+  startListening(): void {
+    if (this.incomingSubscription) {
+      return;
+    }
+
+    this.hubService.connect();
+
+    this.incomingSubscription = this.hubService.messages.subscribe(async (encryptedMessage) => {
 
       // at the moment partner is the sender.
       const conversationId = encryptedMessage.senderId;
 
       if (!conversationId) {
         console.warn('Received encrypted message without a senderId. Dropping message.', encryptedMessage);
-        // We must still ACK invalid messages so the server deletes them from the queue
-        this.hubService.ackMessage(encryptedMessage.messageId, 'unknown');
         return;
       }
 
@@ -31,8 +42,20 @@ export class MessagesService {
 
       await this.saveIncomingMessage(conversationId, text, false, encryptedMessage.messageId);
 
-      this.hubService.ackMessage(encryptedMessage.messageId, conversationId);
+      // Confirm delivery to the Server with a signed receipt
+      this.messagesApi.sendReceipt(encryptedMessage.messageId).subscribe({
+        error: (err) => console.error('Failed to send delivery receipt:', err)
+      });
     });
+  }
+
+  /**
+   * Stop handling incoming messages and disconnect from the Hub. Called on logout.
+   */
+  stopListening(): void {
+    this.incomingSubscription?.unsubscribe();
+    this.incomingSubscription = undefined;
+    this.hubService.disconnect();
   }
 
   /**
@@ -53,10 +76,14 @@ export class MessagesService {
   /**
    * Save a message to the database and update the conversation's last message metadata
    */
-  async saveMessage(conversationId: string, text: string, isMine: boolean): Promise<LocalMessage> {
+  async saveMessage(
+    conversationId: string,
+    text: string, isMine: boolean,
+    id: string = crypto.randomUUID())
+  : Promise<LocalMessage> {
     const time = Date.now();
     const message: LocalMessage = {
-      id: crypto.randomUUID(),
+      id,
       conversationId,
       text,
       isMine,
@@ -75,7 +102,11 @@ export class MessagesService {
   /**
    * Save an incoming message to the database
    */
-  private async saveIncomingMessage(conversationId: string, text: string, isMine: boolean, externalMessageId: string): Promise<LocalMessage> {
+  private async saveIncomingMessage(
+    conversationId: string,
+    text: string, isMine: boolean,
+    externalMessageId: string)
+  : Promise<LocalMessage> {
     // If the conversation doesn't exist yet, we create it dynamically.
     // Name is 'Unknown' by default, fetch alias/name in the future.
     await this.conversationsService.createOrUpdateConversation(conversationId, 'Unknown Contact');

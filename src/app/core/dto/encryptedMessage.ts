@@ -19,12 +19,16 @@ export interface EncryptedMessage {
      */
     recipientId: string;
     /**
-     * ID of the sender user (populated by the Hub before delivery)
+     * ID of the sender user. Set by the Server from the authenticated session at send time; any client-provided value is ignored. Omitted in the send request.
      */
     senderId?: string;
     /**
      * E2E encrypted message payload (Base64)
      */
     payload: string;
+    /**
+     * Detached signature over the payload produced by the sender\'s identity key (Base64). Verified end-to-end by the recipient against the public-key directory.
+     */
+    signature: string;
 }
 

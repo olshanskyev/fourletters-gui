@@ -10,8 +10,8 @@ import { ChatDetailsComponent } from './chat-details/chat-details.component';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { HubService } from '../../core';
 import { MessagesService } from '../../core/services/messages';
+import { MessagesApiService } from '../../core/services/messages/messages-api.service';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, of } from 'rxjs';
 
@@ -34,9 +34,8 @@ import { switchMap, of } from 'rxjs';
 })
 export class ChatComponent {
   sidePanelService = inject(SidePanelService);
-  hubService = inject(HubService);
   messagesService = inject(MessagesService);
-
+  messagesApi = inject(MessagesApiService);
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
 
@@ -63,11 +62,12 @@ export class ChatComponent {
     const text = this.messageText();
     if (!convoId || !text) return;
 
-    // Send via WebSocket
-    this.hubService.sendMessage(convoId, text);
+    // Save to IndexedDB first so the message shows immediately (updates UI via signals).
+    const message = await this.messagesService.saveMessage(convoId, text, true);
 
-    // Save to IndexedDB (updates UI via signals automatically)
-    await this.messagesService.saveMessage(convoId, text, true);
+    this.messagesApi.sendMessage(convoId, text, message.id).subscribe({
+      error: (err) => console.error('Failed to send message:', err)
+    });
 
     this.messageText.set('');
   }

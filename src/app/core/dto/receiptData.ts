@@ -9,10 +9,14 @@
  */
 
 
-export interface EventMessageReceipt { 
+export interface ReceiptData { 
     /**
-     * ID of the outgoing message that triggered the event (dispatch or read)
+     * ID of the original message this receipt refers to.
      */
     messageId: string;
+    /**
+     * ID of the user who delivered/read the message (the original recipient).
+     */
+    recipientId: string;
 }
 
