@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { ReceiptType } from './receiptType';
 
 
 export interface ReceiptData { 
@@ -18,5 +19,12 @@ export interface ReceiptData {
      * ID of the user who delivered/read the message (the original recipient).
      */
     recipientId: string;
+    type: ReceiptType;
+    /**
+     * Signature over (messageId, type, originalSenderId) by the recipient\'s identity key (Base64), relayed unaltered from the submitted DeliveryReceipt.
+     */
+    signature: string;
 }
+
+
 

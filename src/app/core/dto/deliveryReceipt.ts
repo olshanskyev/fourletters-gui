@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { ReceiptType } from './receiptType';
 
 
 export interface DeliveryReceipt { 
@@ -18,19 +19,12 @@ export interface DeliveryReceipt {
      * ID of the original message\'s sender — the party to notify. Echoed by the recipient from the received message so the Server can relay this receipt 
      */
     originalSenderId?: string;
+    type: ReceiptType;
     /**
-     * \'delivered\' = the recipient device received and decrypted it; \'read\' = the user opened it.
-     */
-    type: DeliveryReceiptTypeEnum;
-    /**
-     * Signature over (messageId, type, originalSenderId) by the recipient\'s identity key (Base64). Lets the Server and the original sender trust the receipt without trusting any Hub.
+     * Signature over (messageId, type, originalSenderId) by the recipient\'s identity key (Base64). Lets the original sender trust the receipt without trusting any Hub.
      */
     signature: string;
 }
-export enum DeliveryReceiptTypeEnum {
-    Delivered = 'delivered',
-    Read = 'read'
-};
 
 
 

@@ -12,4 +12,6 @@ export * from './messageEvent';
 export * from './messageReceipt';
 export * from './receiptData';
 export * from './receiptEvent';
+export * from './receiptType';
+export * from './refreshError';
 export * from './userResponse';

@@ -17,7 +17,7 @@ import { switchMap, of } from 'rxjs';
 import { SettingsService } from '../../core';
 import { LocalMessage } from '../../core/services/messages/models/messages.model';
 import { ObserveVisibilityDirective } from './observe-visibility.directive';
-import { DeliveryReceiptTypeEnum } from '../../core/dto/deliveryReceipt';
+import { ReceiptType } from '../../core/dto/receiptType';
 
 @Component({
   selector: 'app-chat',
@@ -79,7 +79,7 @@ export class ChatComponent {
       msg.status = 'read';
 
       this.messagesApi.sendReceipt(msg.id, msg.senderId,
-        DeliveryReceiptTypeEnum.Read).subscribe({
+        ReceiptType.Read).subscribe({
         error: (err) => console.error('Failed to send read receipt:', err)
       });
 

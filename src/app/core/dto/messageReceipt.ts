@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { ReceiptType } from './receiptType';
 
 
 /**
@@ -21,15 +22,12 @@ export interface MessageReceipt {
      * ID of the user who delivered/read the message.
      */
     recipientId: string;
+    type: ReceiptType;
     /**
-     * \'delivered\' = received and decrypted; \'read\' = opened by the user.
+     * Signature over (messageId, type, originalSenderId) by the recipient\'s identity key (Base64), echoed unaltered from the submitted DeliveryReceipt.
      */
-    type: MessageReceiptTypeEnum;
+    signature: string;
 }
-export enum MessageReceiptTypeEnum {
-    Delivered = 'delivered',
-    Read = 'read'
-};
 
 
 

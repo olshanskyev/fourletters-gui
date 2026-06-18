@@ -50,6 +50,21 @@ export class MessagesRepository {
   }
 
   /**
+   * Get a message by its ID
+   */
+  async getMessageById(id: string): Promise<LocalMessage | undefined> {
+     return await db.messages.get(id);
+  }
+
+  /**
+   * Check if a message exists by its ID
+   */
+  async hasMessage(id: string): Promise<boolean> {
+    const message = await db.messages.get(id);
+    return !!message;
+  }
+
+  /**
    * Get live updating stream of messages for a specific conversation
    */
   observeMessagesByConversation(conversationId: string): Observable<LocalMessage[]> {

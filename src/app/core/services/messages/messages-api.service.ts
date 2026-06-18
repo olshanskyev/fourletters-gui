@@ -5,9 +5,10 @@ import { Observable } from 'rxjs';
 import { EncryptedMessage } from '../../dto/encryptedMessage';
 import { AcceptedResponse } from '../../dto/acceptedResponse';
 import { InboxResponse } from '../../dto/inboxResponse';
-import { DeliveryReceipt, DeliveryReceiptTypeEnum } from '../../dto/deliveryReceipt';
+import { DeliveryReceipt } from '../../dto/deliveryReceipt';
 import { MessageBatchRequest } from '../../dto/messageBatchRequest';
 import { MessageBatchResponse } from '../../dto/messageBatchResponse';
+import { ReceiptType } from '../../dto/models';
 
 /**
  * REST client for the Server's message endpoints
@@ -56,7 +57,7 @@ export class MessagesApiService {
    */
   sendReceipt(messageId: string,
     originalSenderId: string,
-    type: DeliveryReceiptTypeEnum = DeliveryReceiptTypeEnum.Delivered)
+    type: ReceiptType = ReceiptType.Delivered)
     : Observable<void> {
     const receipt: DeliveryReceipt = {
       messageId,

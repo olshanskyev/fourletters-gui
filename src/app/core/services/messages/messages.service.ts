@@ -5,7 +5,6 @@ import { Observable, Subscription } from 'rxjs';
 import { ConversationsService } from '../conversations/conversations.service';
 import { HubService } from '../ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
-import { db } from '../database/app.database';
 import { SettingsService } from '../shared/settings.service';
 
 @Injectable({
@@ -71,9 +70,8 @@ export class MessagesService {
 
   private async updateMessageState(messageId: string, status: 'delivered' | 'read') {
     try {
-      const messages = await db.messages.where('id').equals(messageId).toArray();
-      if (messages.length > 0) {
-        const msg = messages[0];
+      const msg = await this.repository.getMessageById(messageId);
+      if (msg) {
         // Only upgrade status (pending -> delivered -> read)
         if (msg.status === 'read' || (msg.status === 'delivered' && status === 'delivered')) {
           return;
@@ -95,8 +93,8 @@ export class MessagesService {
     }
 
     // De-duplicate: Ensure we don't save the same message again when unioning Hot and Cold tiers
-    const existing = await db.messages.where('id').equals(encryptedMessage.messageId).count();
-    if (existing > 0) {
+    const existing = await this.repository.hasMessage(encryptedMessage.messageId);
+    if (existing) {
       return;
     }
 
