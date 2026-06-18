@@ -11,13 +11,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MessagesService } from '../../core/services/messages';
-import { MessagesApiService } from '../../core/services/messages/messages-api.service';
 import { toSignal, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, of } from 'rxjs';
 import { SettingsService } from '../../core';
 import { LocalMessage } from '../../core/services/messages/models/messages.model';
 import { ObserveVisibilityDirective } from './observe-visibility.directive';
-import { ReceiptType } from '../../core/dto/receiptType';
 
 @Component({
   selector: 'app-chat',
@@ -40,7 +38,6 @@ import { ReceiptType } from '../../core/dto/receiptType';
 export class ChatComponent {
   sidePanelService = inject(SidePanelService);
   messagesService = inject(MessagesService);
-  messagesApi = inject(MessagesApiService);
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
   settingsService = inject(SettingsService);
@@ -75,15 +72,7 @@ export class ChatComponent {
 
   onMessageVisible(msg: LocalMessage) {
     if (!msg.isMine && msg.status !== 'read') {
-      // Mark as read locally so we don't send it again
-      msg.status = 'read';
-
-      this.messagesApi.sendReceipt(msg.id, msg.senderId,
-        ReceiptType.Read).subscribe({
-        error: (err) => console.error('Failed to send read receipt:', err)
-      });
-
-      // Update IndexedDB via MessagesService
+      // Mark as read locally and send receipt via MessagesService
       this.messagesService.markAsRead(msg);
     }
   }
