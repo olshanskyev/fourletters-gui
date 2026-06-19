@@ -7,15 +7,14 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { PublicKeySet } from './publicKeySet';
 
 
-export interface UserResponse { 
-    id: string;
-    username: string;
-    avatarUrl?: string;
+export interface KeysResponse { 
     /**
-     * List of user permissions/roles for RBAC.
+     * The user id these public keys belong to.
      */
-    roles: string[];
+    userId: string;
+    keys: PublicKeySet;
 }
 

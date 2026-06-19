@@ -22,16 +22,21 @@ export class MessagesApiService {
   /**
    * Send a message to a recipient. Returns the Server's acceptance (messageId + seq).
    * @param recipientId the recipient user id
-   * @param payload the (eventually encrypted) message body
+   * @param payload the encrypted E2E message body
+   * @param signature the ECDSA signature of the payload
    * @param messageId optional client-generated id; one is created if omitted
    */
-  sendMessage(recipientId: string, payload: string, messageId: string = crypto.randomUUID())
-  : Observable<AcceptedResponse> {
+  sendMessage(
+    recipientId: string,
+    payload: string,
+    signature: string,
+    messageId: string = crypto.randomUUID()
+  ): Observable<AcceptedResponse> {
     const message: EncryptedMessage = {
       messageId,
       recipientId,
       payload,
-      signature: '' // placeholder until E2E signing is implemented
+      signature
     };
     return this.httpClient.post<AcceptedResponse>('/messages', message);
   }
@@ -52,18 +57,20 @@ export class MessagesApiService {
   }
 
   /**
-   * Acknowledge a received message with a signed delivery/read receipt (signature is a
-   * placeholder for now). Receipts go to the Server, never to a Hub.
+   * Acknowledge a received message with a signed delivery/read receipt.
+   * Receipts go to the Server, never to a Hub.
    */
-  sendReceipt(messageId: string,
+  sendReceipt(
+    messageId: string,
     originalSenderId: string,
-    type: ReceiptType = ReceiptType.Delivered)
-    : Observable<void> {
+    signature: string,
+    type: ReceiptType = ReceiptType.Delivered
+  ): Observable<void> {
     const receipt: DeliveryReceipt = {
       messageId,
       originalSenderId,
       type,
-      signature: '' // placeholder until E2E signing is implemented
+      signature
     };
     return this.httpClient.post<void>('/receipts', receipt);
   }

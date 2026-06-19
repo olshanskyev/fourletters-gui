@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { ConversationsRepository } from './conversations.repository';
-import { LocalConversation } from './models/conversations.model';
+import { LocalConversation, ConversationType } from './models/conversations.model';
 import { Observable } from 'rxjs';
 
 @Injectable({
@@ -17,18 +17,43 @@ export class ConversationsService {
   }
 
   /**
-   * Initialize a new conversation or get an existing one
+   * Get a conversation by ID
    */
-  async createOrUpdateConversation(id: string, name: string): Promise<LocalConversation> {
-    const existing = await this.repository.getConversation(id);
+  async getConversation(id: string): Promise<LocalConversation | undefined> {
+    const convo = await this.repository.getConversation(id);
+    if (convo && !convo.type) {
+      // Migrate old data on the fly
+      convo.type = 'direct';
+      convo.participants = [convo.id];
+    }
+    return convo;
+  }
 
+  /**
+   * Finds an existing direct conversation with a specific user
+   */
+  async getDirectConversationWith(userId: string): Promise<LocalConversation | undefined> {
+    // This is simple since we store all locally. As arrays grow, consider a Dexie index.
+    const all = await this.repository.getAllConversations();
+    return all.find(c => c.type === 'direct' && c.participants?.includes(userId));
+  }
+
+  /**
+   * Create a new conversation
+   */
+  async createConversation(
+    name: string,
+    type: ConversationType = 'direct',
+    participants: string[] = []
+  ): Promise<LocalConversation> {
+    const id = crypto.randomUUID();
     const conversation: LocalConversation = {
       id,
       name,
-      unreadCount: existing ? existing.unreadCount : 0,
-      updatedAt: existing ? existing.updatedAt : Date.now(),
-      lastMessageText: existing?.lastMessageText,
-      lastMessageAt: existing?.lastMessageAt
+      type,
+      participants,
+      unreadCount: 0,
+      updatedAt: Date.now(),
     };
 
     await this.repository.putConversation(conversation);

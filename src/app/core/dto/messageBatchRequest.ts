@@ -17,6 +17,6 @@ export interface MessageBatchRequest {
     /**
      * The messages to (re)submit, capped per request; the client chunks larger resyncs.
      */
-    messages: Array<EncryptedMessage>;
+    messages: EncryptedMessage[];
 }
 

@@ -1,4 +1,4 @@
-import { base64, currentTimestamp, timeLeft } from './helpers';
+import { base64, currentTimestamp, timeLeft } from '../helpers';
 
 interface JwtTokenPayload {
   exp?: number;

@@ -43,14 +43,16 @@ app-chat-layout {
     background-color: var(--mat-sys-secondary);
     border-bottom-left-radius: 0;
   }
+
   .bubble-footer {
     display: grid;
     grid-template-columns: auto max-content;
 
     .message-status {
+      display: inline-flex;
       font-size: 0.75rem;
       font-weight: 100;
-      display: inline-flex;
+
       mat-icon {
         width: 18px !important;
         height: 18px !important;

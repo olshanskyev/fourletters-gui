@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, map, of, shareReplay, take, tap } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay, take, tap, from, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { TokenService } from './token.service';
@@ -13,7 +13,11 @@ import { UserResponse } from '../../dto/userResponse';
 import { AuthResponse } from '../../dto/authResponse';
 import { AuthRequest } from '../../dto/authRequest';
 import { TokenReader } from './token-reader';
-import { SettingsService } from '../shared';
+import { SettingsService } from '../shared/settings.service';
+import { AppDatabase } from '../database/app.database';
+import { RegistryDatabase } from '../database/registry.database';
+import { IdentityService } from '../crypto/identity.service';
+import { RefreshErrorReasonEnum } from '../../dto/refreshError';
 
 @Injectable({
   providedIn: 'root',
@@ -26,8 +30,11 @@ export class AuthService {
   public get tokenReader(): TokenReader { return this.tokenService; }
 
   private readonly settings = inject(SettingsService);
+  private readonly appDb = inject(AppDatabase);
+  private readonly registryDb = inject(RegistryDatabase);
   private readonly vkService = inject(VKAuthService);
   private readonly googleService = inject(GoogleAuthService);
+  private readonly identityService = inject(IdentityService);
 
   private readonly router = inject(Router);
   private refreshInFlight$: Observable<boolean> | null = null;
@@ -44,11 +51,21 @@ export class AuthService {
       .subscribe(() => this.refresh().subscribe());
   }
 
-  private handlePositiveAuthResponse(authResponse: AuthResponse) {
+  private async handlePositiveAuthResponse(authResponse: AuthResponse) {
     this.tokenService.set(authResponse.access_token);
     this._user.set(authResponse.user);
     const id = this.tokenService.sessionId();
-    if (id) this.settings.setOptions({ sessionId: id });
+    const settingsUpdate: any = { lastUserId: authResponse.user.id };
+    if (id) settingsUpdate.sessionCorrelationId = id;
+    this.settings.setOptions(settingsUpdate);
+
+    // Initialize DB and Registry
+    this.appDb.initialize(authResponse.user.id);
+    await this.registryDb.users.put({
+      userId: authResponse.user.id,
+      name: authResponse.user.username,
+      avatarUrl: authResponse.user.avatarUrl
+    });
   }
 
   private auth(token: string, provider: string) {
@@ -62,9 +79,9 @@ export class AuthService {
 
     source.pipe(
       catchError(() => of(undefined)),
-      tap(authResponse => {
+      switchMap(async authResponse => {
         if (authResponse) {
-          this.handlePositiveAuthResponse(authResponse);
+          await this.handlePositiveAuthResponse(authResponse);
           this.router.navigateByUrl('/m');
         }
       }),
@@ -81,7 +98,7 @@ export class AuthService {
 
 
   refresh() {
-    const sessionId = this.settings.options().sessionId;
+    const sessionId = this.settings.options().sessionCorrelationId;
 
     if (!sessionId) {
       this.refreshInFlight$ = null;
@@ -103,19 +120,31 @@ export class AuthService {
     this.refreshInFlight$ = source.pipe(
       take(1),
       catchError((error: unknown) => {
-        // not clear session in case server is unavailable,
-        // to prevent user from being logged out due to temporary network issues
-        if (error instanceof HttpErrorResponse &&
-            error.status === HttpStatusCode.Unauthorized) {
-            this.settings.setOptions({ sessionId: undefined });
-        }
-        this.tokenService.clear();
-        this._user.set(undefined);
-        return of(undefined);
+        return from((async () => {
+          // not clear session in case server is unavailable,
+          // to prevent user from being logged out due to temporary network issues
+          if (error instanceof HttpErrorResponse &&
+              error.status === HttpStatusCode.Unauthorized) {
+
+              if (error.error?.reason === RefreshErrorReasonEnum.Revoked) {
+                  const userId = this.settings.options().lastUserId;
+                  if (userId) {
+                      this.appDb.initialize(userId);
+                      console.warn('Session was revoked. Wiping local E2E identity keys.');
+                      await this.identityService.revokeIdentity();
+                  }
+              }
+
+              this.settings.setOptions({ sessionCorrelationId: undefined });
+          }
+          this.tokenService.clear();
+          this._user.set(undefined);
+          return undefined;
+        })());
       }),
-      tap(authResponse => {
+      switchMap(async authResponse => {
         if (authResponse) {
-          this.handlePositiveAuthResponse(authResponse);
+          await this.handlePositiveAuthResponse(authResponse);
         }
       }),
       map(() => this.tokenService.isTokenValid()),
@@ -137,7 +166,7 @@ export class AuthService {
       tap(() => {
         this.tokenService.clear();
         this._user.set(undefined);
-        this.settings.setOptions({ sessionId: undefined });
+        this.settings.setOptions({ sessionCorrelationId: undefined });
       }),
       map(() => !this.tokenService.isTokenValid())
     );

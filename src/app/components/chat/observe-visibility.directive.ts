@@ -1,4 +1,4 @@
-import { Directive, ElementRef, EventEmitter, Input, OnDestroy, Output, OnChanges, SimpleChanges } from '@angular/core';
+import { Directive, ElementRef, EventEmitter, Input, OnDestroy, Output, OnChanges, SimpleChanges, inject } from '@angular/core';
 
 @Directive({
   selector: '[appObserveVisibility]',
@@ -10,7 +10,7 @@ export class ObserveVisibilityDirective implements OnChanges, OnDestroy {
 
   private observer: IntersectionObserver | undefined;
 
-  constructor(private element: ElementRef) {}
+  private element = inject(ElementRef);
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['appObserveVisibility']) {

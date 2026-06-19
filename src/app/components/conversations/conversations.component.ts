@@ -32,7 +32,7 @@ export class ConversationsComponent {
   // Automatically streams and sorts conversations from IndexedDB!
   conversations = toSignal(this.conversationsService.observeConversations(), { initialValue: [] });
 
-  /*constructor() {
-    this.conversationsService.createOrUpdateConversation('be771005-e6dd-4e4d-8fb7-71bc28dcc7c7', 'GOOGLE');
-  }*/
+  constructor() {
+    //this.conversationsService.createConversation('NAME', 'direct', ['01725568-05f3-40ae-905f-20456f33ec73']);
+  }
 }

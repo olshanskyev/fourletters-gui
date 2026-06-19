@@ -7,15 +7,10 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { KeysResponse } from './keysResponse';
 
 
-export interface UserResponse { 
-    id: string;
-    username: string;
-    avatarUrl?: string;
-    /**
-     * List of user permissions/roles for RBAC.
-     */
-    roles: string[];
+export interface PublicKeysBatchResponse { 
+    results: KeysResponse[];
 }
 

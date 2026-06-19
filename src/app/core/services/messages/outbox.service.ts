@@ -3,7 +3,9 @@ import { MessagesRepository } from './messages.repository';
 import { LocalMessage } from './models/messages.model';
 import { ConversationsService } from '../conversations/conversations.service';
 import { MessagesApiService } from './messages-api.service';
-import { SettingsService } from '../shared/settings.service';
+import { AppDatabase } from '../database/app.database';
+import { SecureMessageService } from './secure-message.service';
+import { lastValueFrom } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -12,7 +14,8 @@ export class OutboxService {
   private repository = inject(MessagesRepository);
   private conversationsService = inject(ConversationsService);
   private messagesApi = inject(MessagesApiService);
-  private settingsService = inject(SettingsService);
+  private appDb = inject(AppDatabase);
+  private secureMsg = inject(SecureMessageService);
 
   async processReceipt(messageId: string, status: 'delivered' | 'read') {
     try {
@@ -31,7 +34,7 @@ export class OutboxService {
   }
 
   async resync(): Promise<void> {
-    const currentServerStartedAt = this.settingsService.options().serverStartedAt;
+    const currentServerStartedAt = await this.appDb.getMeta<number>('serverStartedAt');
     if (!currentServerStartedAt) return;
 
     try {
@@ -55,38 +58,49 @@ export class OutboxService {
         }
       }
 
-      if (messagesToResend.length === 0) return;
-
       // Group into chunks of 50 to avoid oversized payloads
       const chunkSize = 50;
       for (let i = 0; i < messagesToResend.length; i += chunkSize) {
         const chunk = messagesToResend.slice(i, i + chunkSize);
 
-        const payload = chunk.map(msg => ({
-          messageId: msg.id,
-          recipientId: msg.conversationId,
-          payload: msg.text,
-          signature: '' // placeholder until E2E signing is implemented
-        }));
+        const payloadPromises = chunk.map(async msg => {
+          // Recover plaintext from at-rest encrypted message
+          const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
+          const targetRecipientId = msg.recipientId || msg.conversationId;
+          const {
+            payload,
+            signature
+          } = await this.secureMsg.buildOutgoingPayload(targetRecipientId, plaintext);
 
-        this.messagesApi.sendMessagesBatch(payload).subscribe({
-          next: async (res) => {
-            if (res.serverStartedAt) {
-              this.settingsService.setOptions({ serverStartedAt: res.serverStartedAt });
-            }
-
-            // Update accepted status for each message according to the results
-            for (const acceptedRes of res.results || []) {
-              const localMsg = chunk.find(m => m.id === acceptedRes.messageId);
-              if (localMsg) {
-                localMsg.status = 'accepted';
-                localMsg.serverStartedAt = res.serverStartedAt;
-                await this.repository.updateMessage(localMsg).catch(err => console.error('Failed to update message metadata', err));
-              }
-            }
-          },
-          error: (err) => console.error('Failed to resubmit batched messages:', err)
+          return {
+            messageId: msg.id,
+            recipientId: targetRecipientId,
+            payload,
+            signature
+          };
         });
+
+        const payload = await Promise.all(payloadPromises);
+
+        try {
+          const res = await lastValueFrom(this.messagesApi.sendMessagesBatch(payload));
+
+          if (res.serverStartedAt) {
+            await this.appDb.setMeta('serverStartedAt', res.serverStartedAt);
+          }
+
+          // Update accepted status for each message according to the results
+          for (const acceptedRes of res.results || []) {
+            const localMsg = chunk.find(m => m.id === acceptedRes.messageId);
+            if (localMsg) {
+              localMsg.status = 'accepted';
+              localMsg.serverStartedAt = res.serverStartedAt;
+              await this.repository.updateMessage(localMsg).catch(err => console.error('Failed to update message metadata', err));
+            }
+          }
+        } catch (err) {
+          console.error('Failed to resubmit batched messages:', err);
+        }
       }
 
     } catch (err) {
@@ -94,14 +108,22 @@ export class OutboxService {
     }
   }
 
-  async sendMessage(conversationId: string, text: string): Promise<void> {
+  async sendMessage(conversationId: string, recipientId: string, text: string): Promise<void> {
     const id = crypto.randomUUID();
     const time = Date.now();
+
+    // 1. Encrypt for local At-Rest Storage
+    const atRestCiphertext = await this.secureMsg.encryptForAtRest(id, text);
+
+    // 2. Encrypt & Sign for E2E Transmission
+    const { payload, signature } = await this.secureMsg.buildOutgoingPayload(recipientId, text);
+
     const message: LocalMessage = {
       id,
       conversationId,
       senderId: 'me', // Placeholder, real senderId the server calculates based on auth
-      text,
+      recipientId,
+      text: atRestCiphertext,
       isMine: true,
       createdAt: time,
       status: 'pending',
@@ -112,16 +134,23 @@ export class OutboxService {
     await this.repository.addMessage(message);
     await this.conversationsService.updateLastMessage(conversationId, text, time);
 
-    // Call API and subscribe
-    this.messagesApi.sendMessage(conversationId, text, id).subscribe({
-      next: (res) => {
-        message.status = 'accepted';
+    // Call API and await result
+    try {
+      const res = await lastValueFrom(
+        this.messagesApi.sendMessage(recipientId, payload, signature, id)
+      );
+
+      const msgToUpdate = await this.repository.getMessageById(id);
+      if (msgToUpdate) {
+        msgToUpdate.status = 'accepted';
         if (res.serverStartedAt) {
-          message.serverStartedAt = res.serverStartedAt;
+          msgToUpdate.serverStartedAt = res.serverStartedAt;
+          await this.appDb.setMeta('serverStartedAt', res.serverStartedAt);
         }
-        this.repository.updateMessage(message).catch(err => console.error('Failed to update message metadata', err));
-      },
-      error: (err) => console.error('Failed to send message:', err)
-    });
+        await this.repository.updateMessage(msgToUpdate).catch(err => console.error('Failed to update message metadata', err));
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
   }
 }

@@ -34,7 +34,7 @@
                 (visible)="onMessageVisible(msg)"
                 [class]="{'mine': msg.isMine, 'theirs': !msg.isMine}">
                 <div>
-                  {{ msg.text }}
+                  {{ msg | decryptMessage | async }}
                 </div>
                 <div class="bubble-footer">
                   <div></div>

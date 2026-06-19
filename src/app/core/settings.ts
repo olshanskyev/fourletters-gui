@@ -1,7 +1,7 @@
 export interface AppSettings {
   language: string;
-  sessionId?: string;
-  serverStartedAt?: number;
+  sessionCorrelationId?: string;
+  lastUserId?: string;
 }
 
 export const defaults: AppSettings = {

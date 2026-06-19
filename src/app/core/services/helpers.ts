@@ -15,9 +15,34 @@ export class Base64 {
 
     return atob(b64);
   }
+
+  static bufferToBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  }
+
+  static base64ToBuffer(b64: string): ArrayBuffer {
+    const binary = Base64.decode(b64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
 }
 
-export const base64 = { encode: Base64.encode, decode: Base64.decode };
+export const base64 = { 
+  encode: Base64.encode, 
+  decode: Base64.decode, 
+  bufferToBase64: Base64.bufferToBase64, 
+  base64ToBuffer: Base64.base64ToBuffer 
+};
 
 export function capitalize(text: string): string {
   return text.substring(0, 1).toUpperCase() + text.substring(1, text.length).toLowerCase();

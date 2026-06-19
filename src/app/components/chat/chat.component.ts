@@ -16,6 +16,7 @@ import { switchMap, of } from 'rxjs';
 import { SettingsService } from '../../core';
 import { LocalMessage } from '../../core/services/messages/models/messages.model';
 import { ObserveVisibilityDirective } from './observe-visibility.directive';
+import { DecryptMessagePipe } from './decrypt-message.pipe';
 
 @Component({
   selector: 'app-chat',
@@ -33,6 +34,7 @@ import { ObserveVisibilityDirective } from './observe-visibility.directive';
     MatIconModule,
     RouterLink,
     ObserveVisibilityDirective,
+    DecryptMessagePipe
   ]
 })
 export class ChatComponent {

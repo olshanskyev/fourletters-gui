@@ -1,13 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
 import { LocalMessage } from './models/messages.model';
-import { Observable, Subscription } from 'rxjs';
+import { Observable, Subscription, lastValueFrom, concatMap } from 'rxjs';
 import { ConversationsService } from '../conversations/conversations.service';
 import { HubService } from './ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
-import { SettingsService } from '../shared/settings.service';
 import { OutboxService } from './outbox.service';
 import { ReceiptType } from '../../dto/receiptType';
+import { AppDatabase } from '../database/app.database';
+import { SecureMessageService } from './secure-message.service';
+import { EncryptedMessage } from '../../dto/encryptedMessage';
+import { ReceiptData } from '../../dto/models';
 
 @Injectable({
   providedIn: 'root'
@@ -17,8 +20,9 @@ export class MessagesService {
   private conversationsService = inject(ConversationsService);
   private hubService = inject(HubService);
   private messagesApi = inject(MessagesApiService);
-  private settingsService = inject(SettingsService);
   private outboxService = inject(OutboxService);
+  private appDb = inject(AppDatabase);
+  private secureMsg = inject(SecureMessageService);
 
   private incomingSubscription?: Subscription;
   private deliveredSubscription?: Subscription;
@@ -35,11 +39,36 @@ export class MessagesService {
 
     this.hubService.connect();
 
-    // Sync inbox at startup
-    this.messagesApi.fetchInbox().subscribe({
-      next: async (res) => {
+    // init subscriptions to live events from the Hub
+    this.incomingSubscription = this.hubService.messages.pipe(
+      concatMap(async (encryptedMessage) => {
+        await this.processIncomingMessage(encryptedMessage);
+      })
+    ).subscribe();
+
+    this.deliveredSubscription = this.hubService.messageDelivered.pipe(
+      concatMap(async (receipt) => {
+        if (await this.checkReceiptSignature(receipt)) {
+          await this.outboxService.processReceipt(receipt.messageId, 'delivered');
+        }
+      })
+    ).subscribe();
+
+    this.readSubscription = this.hubService.messageRead.pipe(
+      concatMap(async (receipt) => {
+        if (await this.checkReceiptSignature(receipt)) {
+          await this.outboxService.processReceipt(receipt.messageId, 'read');
+        }
+      })
+    ).subscribe();
+
+    // async initialization
+    (async () => {
+      try {
+        // Sync inbox at startup
+        const res = await lastValueFrom(this.messagesApi.fetchInbox());
         if (res.serverStartedAt) {
-          this.settingsService.setOptions({ serverStartedAt: res.serverStartedAt });
+          await this.appDb.setMeta('serverStartedAt', res.serverStartedAt);
         }
 
         // Save unread messages from inbox
@@ -49,32 +78,34 @@ export class MessagesService {
 
         // Process receipts for messages we sent that were delivered/read while we were offline
         for (const receipt of res.receipts || []) {
-          await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
+          if (await this.checkReceiptSignature(receipt)) {
+            await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
+          } else {
+             console.warn('Invalid receipt signature dropped', receipt);
+          }
         }
+      } catch (err) {
+        console.error('Failed to sync inbox:', err);
+      }
 
+      try {
         // Retry undelivered messages if server restarted
         this.outboxService.resync();
-      },
-      error: (err) => console.error('Failed to sync inbox:', err)
-    });
+      } catch (err) {
+        console.error('Failed to resync outbox messages after startup:', err);
+      }
+    })();
 
-    this.incomingSubscription = this.hubService.messages.subscribe(async (encryptedMessage) => {
-      await this.processIncomingMessage(encryptedMessage);
-    });
-
-    this.deliveredSubscription = this.hubService.messageDelivered.subscribe(async (receipt) => {
-      await this.outboxService.processReceipt(receipt.messageId, 'delivered');
-    });
-
-    this.readSubscription = this.hubService.messageRead.subscribe(async (receipt) => {
-      await this.outboxService.processReceipt(receipt.messageId, 'read');
-    });
   }
 
-  private async processIncomingMessage(encryptedMessage: any) {
-    const conversationId = encryptedMessage.senderId;
+  private async checkReceiptSignature(receipt: ReceiptData): Promise<boolean> {
+    return await this.secureMsg.verifyReceipt(
+        receipt.messageId, receipt.type, receipt.recipientId, receipt.signature
+    );
+  }
 
-    if (!conversationId) {
+  private async processIncomingMessage(encryptedMessage: EncryptedMessage | any) {
+    if (!encryptedMessage.senderId) {
       console.warn('Received encrypted message without a senderId. Dropping message.', encryptedMessage);
       return;
     }
@@ -85,14 +116,55 @@ export class MessagesService {
       return;
     }
 
-    const text = encryptedMessage.payload;
+    try {
+      // 1. Unpack E2E Payload (Verify Signature & Decrypt ECDH->AES)
+      const plaintext = await this.secureMsg.unpackIncomingPayload(
+        encryptedMessage.senderId,
+        encryptedMessage.payload,
+        encryptedMessage.signature
+      );
 
-    await this.saveIncomingMessage(conversationId, encryptedMessage.senderId, text, false, encryptedMessage.messageId);
+      // 2. Encrypt for Local IndexedDB storage (AES Master Key)
+      const ciphertextAtRest = await this.secureMsg.encryptForAtRest(
+        encryptedMessage.messageId,
+        plaintext
+      );
 
-    // Confirm delivery to the Server with a signed receipt
-    this.messagesApi.sendReceipt(encryptedMessage.messageId, encryptedMessage.senderId).subscribe({
-      error: (err) => console.error('Failed to send delivery receipt:', err)
-    });
+      const localMessage = await this.saveIncomingMessage(
+        encryptedMessage.senderId,
+        encryptedMessage.recipientId,
+        ciphertextAtRest,
+        false,
+        encryptedMessage.messageId
+      );
+
+      // Update preview to plaintext
+      await this.conversationsService.updateLastMessage(
+        localMessage.conversationId,
+        plaintext,
+        Date.now()
+      );
+
+      // 3. Confirm delivery dynamically signing the receipt
+      const receiptSignature = await this.secureMsg.signReceipt(
+        encryptedMessage.messageId, ReceiptType.Delivered, encryptedMessage.senderId
+      );
+
+      try {
+        await lastValueFrom(
+          this.messagesApi.sendReceipt(
+            encryptedMessage.messageId,
+            encryptedMessage.senderId,
+            receiptSignature
+          )
+        );
+      } catch (err) {
+        console.error('Failed to send delivery receipt:', err);
+      }
+
+    } catch (err) {
+      console.warn('E2E validation or decryption failed for message', encryptedMessage.messageId, err);
+    }
   }
 
   /**
@@ -109,6 +181,7 @@ export class MessagesService {
     this.readSubscription = undefined;
 
     this.hubService.disconnect();
+    this.secureMsg.clearMemory();
   }
 
   /**
@@ -127,7 +200,18 @@ export class MessagesService {
   }
 
   async sendMessage(conversationId: string, text: string): Promise<void> {
-    return this.outboxService.sendMessage(conversationId, text);
+    const convo = await this.conversationsService.getConversation(conversationId);
+    if (!convo || convo.type === 'direct') {
+      // If conversation is not found yet, default to direct
+      const recipientId = (convo && convo.participants?.length > 0)
+        ? convo.participants[0]
+        : conversationId;
+      return this.outboxService.sendMessage(conversationId, recipientId, text);
+    } else {
+      console.warn('Group message sending is not implemented yet. Placeholder activated.');
+      // Placeholder for group send logic
+      return Promise.resolve();
+    }
   }
 
   /**
@@ -135,32 +219,66 @@ export class MessagesService {
    */
   async markAsRead(message: LocalMessage): Promise<void> {
     message.status = 'read';
-    await this.repository.updateMessage(message).catch(err => console.error('Failed to update local message as read', err));
+    await this.repository.updateMessage(message)
+      .catch(err => console.error('Failed to update local message as read', err));
 
-    this.messagesApi.sendReceipt(message.id, message.senderId, ReceiptType.Read).subscribe({
-      error: (err) => console.error('Failed to send read receipt:', err)
-    });
+    try {
+      const receiptSignature = await this.secureMsg.signReceipt(
+        message.id,
+        ReceiptType.Read,
+        message.senderId
+      );
+
+      try {
+        await lastValueFrom(
+          this.messagesApi.sendReceipt(
+            message.id,
+            message.senderId,
+            receiptSignature,
+            ReceiptType.Read
+          )
+        );
+      } catch (err) {
+        console.error('Failed to send read receipt:', err);
+      }
+    } catch (e) {
+      console.warn('Could not sign read receipt', e);
+    }
   }
 
   /**
    * Save an incoming message to the database
    */
   private async saveIncomingMessage(
-    conversationId: string,
     senderId: string,
+    recipientId: string,
     text: string,
     isMine: boolean,
     externalMessageId: string)
   : Promise<LocalMessage> {
-    // If the conversation doesn't exist yet, we create it dynamically.
-    // Name is 'Unknown' by default, fetch alias/name in the future.
-    await this.conversationsService.createOrUpdateConversation(conversationId, 'Unknown Contact');
+    // Find if we already have a conversation with this person
+    let conversationId: string;
+    // currently only direct conversations are supported
+    const existingConvo = await this.conversationsService.getDirectConversationWith(senderId);
+
+    if (existingConvo) {
+      conversationId = existingConvo.id;
+    } else {
+      // Create a brand new UUID for this incoming conversation
+      const newConvo = await this.conversationsService.createConversation(
+        'Unknown Contact',
+        'direct',
+        [senderId]
+      );
+      conversationId = newConvo.id;
+    }
 
     const time = Date.now();
     const message: LocalMessage = {
       id: externalMessageId, // Real external message id
       conversationId,
       senderId,
+      recipientId,
       text,
       isMine,
       createdAt: time

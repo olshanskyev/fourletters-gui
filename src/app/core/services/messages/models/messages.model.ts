@@ -4,6 +4,7 @@ export interface LocalMessage {
   id: string;
   conversationId: string;
   senderId: string;
+  recipientId?: string; // Target user when sending a direct message
   text: string;
   isMine: boolean;
   createdAt: number;
