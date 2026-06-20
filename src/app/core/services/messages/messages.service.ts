@@ -200,18 +200,7 @@ export class MessagesService {
   }
 
   async sendMessage(conversationId: string, text: string): Promise<void> {
-    const convo = await this.conversationsService.getConversation(conversationId);
-    if (!convo || convo.type === 'direct') {
-      // If conversation is not found yet, default to direct
-      const recipientId = (convo && convo.participants?.length > 0)
-        ? convo.participants[0]
-        : conversationId;
-      return this.outboxService.sendMessage(conversationId, recipientId, text);
-    } else {
-      console.warn('Group message sending is not implemented yet. Placeholder activated.');
-      // Placeholder for group send logic
-      return Promise.resolve();
-    }
+    return this.outboxService.sendMessage(conversationId, text);
   }
 
   /**
@@ -257,6 +246,8 @@ export class MessagesService {
     externalMessageId: string)
   : Promise<LocalMessage> {
     // Find if we already have a conversation with this person
+
+    //ToDo: add group conversation support
     let conversationId: string;
     // currently only direct conversations are supported
     const existingConvo = await this.conversationsService.getDirectConversationWith(senderId);

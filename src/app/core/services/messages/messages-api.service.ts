@@ -9,6 +9,7 @@ import { DeliveryReceipt } from '../../dto/deliveryReceipt';
 import { MessageBatchRequest } from '../../dto/messageBatchRequest';
 import { MessageBatchResponse } from '../../dto/messageBatchResponse';
 import { ReceiptType } from '../../dto/models';
+import { ConversationType } from '../..';
 
 /**
  * REST client for the Server's message endpoints
@@ -30,7 +31,8 @@ export class MessagesApiService {
     recipientId: string,
     payload: string,
     signature: string,
-    messageId: string = crypto.randomUUID()
+    messageId: string = crypto.randomUUID(),
+    receipientType: ConversationType = 'direct' // toDo: group sending
   ): Observable<AcceptedResponse> {
     const message: EncryptedMessage = {
       messageId,

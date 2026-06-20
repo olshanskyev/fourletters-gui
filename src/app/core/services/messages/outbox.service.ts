@@ -6,6 +6,7 @@ import { MessagesApiService } from './messages-api.service';
 import { AppDatabase } from '../database/app.database';
 import { SecureMessageService } from './secure-message.service';
 import { lastValueFrom } from 'rxjs';
+import { ConversationType, LocalConversation } from '../..';
 
 @Injectable({
   providedIn: 'root'
@@ -108,7 +109,29 @@ export class OutboxService {
     }
   }
 
-  async sendMessage(conversationId: string, recipientId: string, text: string): Promise<void> {
+  getReceipient(conversation: LocalConversation): string | undefined {
+    return (conversation?.type === 'direct')?
+       conversation.participants?.[0] :
+       conversation?.groupId
+  }
+
+  async sendMessage(
+    conversationId: string,
+    text: string ): Promise<void> {
+
+    const convo = await this.conversationsService.getConversation(conversationId);
+    if (!convo) {
+      console.error('Conversation not found. Message sending failed.', conversationId);
+      return Promise.resolve();
+    }
+
+    const recipientId = this.getReceipient(convo);
+
+    if (!recipientId) {
+      console.error('No recipient found for conversation. Message sending failed.', conversationId);
+      return Promise.resolve();
+    }
+
     const id = crypto.randomUUID();
     const time = Date.now();
 
@@ -137,7 +160,7 @@ export class OutboxService {
     // Call API and await result
     try {
       const res = await lastValueFrom(
-        this.messagesApi.sendMessage(recipientId, payload, signature, id)
+        this.messagesApi.sendMessage(recipientId, payload, signature, id, convo.type)
       );
 
       const msgToUpdate = await this.repository.getMessageById(id);

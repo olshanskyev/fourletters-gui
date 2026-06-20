@@ -20,13 +20,7 @@ export class ConversationsService {
    * Get a conversation by ID
    */
   async getConversation(id: string): Promise<LocalConversation | undefined> {
-    const convo = await this.repository.getConversation(id);
-    if (convo && !convo.type) {
-      // Migrate old data on the fly
-      convo.type = 'direct';
-      convo.participants = [convo.id];
-    }
-    return convo;
+    return await this.repository.getConversation(id);
   }
 
   /**
