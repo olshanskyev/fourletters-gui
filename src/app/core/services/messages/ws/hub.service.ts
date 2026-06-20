@@ -1,13 +1,9 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject } from 'rxjs';
-import { environment } from '../../../../../environments/environment';
+import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
-import { EncryptedMessage } from '../../../dto/encryptedMessage';
-import { MessageEvent, MessageEventEventEnum } from '../../../dto/messageEvent';
-import { ReceiptEvent, ReceiptEventEventEnum } from '../../../dto/receiptEvent';
-import { ReceiptData } from '../../../dto/receiptData';
-
+import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData } from '@dto/models';
 
 export type HubEvent = MessageEvent | ReceiptEvent;
 

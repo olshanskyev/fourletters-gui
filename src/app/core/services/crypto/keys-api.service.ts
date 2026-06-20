@@ -1,8 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { KeysUploadRequest } from '../../dto/keysUploadRequest';
-import { KeysResponse } from '../../dto/keysResponse';
-import { PublicKeysBatchResponse } from '../../dto/publicKeysBatchResponse';
+import { KeysUploadRequest, KeysResponse, PublicKeysBatchResponse } from '@dto/models';
 import { Observable } from 'rxjs';
 
 @Injectable({

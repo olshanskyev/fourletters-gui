@@ -1,12 +1,12 @@
 import { Routes } from '@angular/router';
-import { MainLayoutComponent } from './layouts/main-layout/main-layout.component';
-import { MainComponent } from './pages/main/main.component';
+import { MainLayoutComponent } from '@layouts';
+import { MainComponent } from '@pages';
 
 
-import { loggedInGuard } from './core/guards';
-import { DefaultLayoutComponent } from './layouts/default-layout/default-layout.component';
-import { HomeComponent } from './pages/home/home.component';
-import { loggedInRedirectGuard } from './core/guards/logged-in-redirect-guard';
+import { loggedInGuard } from '@core/guards';
+import { DefaultLayoutComponent } from '@layouts';
+import { HomeComponent } from '@pages';
+import { loggedInRedirectGuard } from '@core/guards';
 
 export const routes: Routes = [
   {

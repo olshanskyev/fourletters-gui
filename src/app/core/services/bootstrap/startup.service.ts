@@ -4,8 +4,8 @@ import { catchError, of, Observable, distinctUntilChanged, concatMap } from 'rxj
 import { toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
-import { UserResponse } from '../../dto/userResponse';
-import { MessagesService } from '../messages/messages.service';
+import { UserResponse } from '@core/dto/userResponse';
+import { MessagesService } from '@core/services/messages/messages.service';
 import { IdentityService } from '../crypto/identity.service';
 
 @Injectable({

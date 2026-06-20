@@ -2,15 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
 import { LocalMessage } from './models/messages.model';
 import { Observable, Subscription, lastValueFrom, concatMap } from 'rxjs';
-import { ConversationsService } from '../conversations/conversations.service';
+import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { HubService } from './ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
 import { OutboxService } from './outbox.service';
-import { ReceiptType } from '../../dto/receiptType';
-import { AppDatabase } from '../database/app.database';
+import { ReceiptType, EncryptedMessage, ReceiptData } from '@dto/models';
+import { AppDatabase } from '@core/services/database/app.database';
 import { SecureMessageService } from './secure-message.service';
-import { EncryptedMessage } from '../../dto/encryptedMessage';
-import { ReceiptData } from '../../dto/models';
 
 @Injectable({
   providedIn: 'root'
@@ -283,4 +281,9 @@ export class MessagesService {
 
     return message;
   }
+
+  async decryptFromAtRest(messageId: string, ciphertext: string): Promise<string> {
+    return this.secureMsg.decryptFromAtRest(messageId, ciphertext);
+  }
 }
+

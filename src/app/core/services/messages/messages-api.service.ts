@@ -2,14 +2,16 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import { EncryptedMessage } from '../../dto/encryptedMessage';
-import { AcceptedResponse } from '../../dto/acceptedResponse';
-import { InboxResponse } from '../../dto/inboxResponse';
-import { DeliveryReceipt } from '../../dto/deliveryReceipt';
-import { MessageBatchRequest } from '../../dto/messageBatchRequest';
-import { MessageBatchResponse } from '../../dto/messageBatchResponse';
-import { ReceiptType } from '../../dto/models';
-import { ConversationType } from '../..';
+import { 
+  EncryptedMessage, 
+  AcceptedResponse, 
+  InboxResponse, 
+  DeliveryReceipt, 
+  MessageBatchRequest, 
+  MessageBatchResponse, 
+  ReceiptType 
+} from '@dto/models';
+import { ConversationType } from '@core/services/conversations';
 
 /**
  * REST client for the Server's message endpoints

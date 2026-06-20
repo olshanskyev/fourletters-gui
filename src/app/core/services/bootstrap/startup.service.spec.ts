@@ -3,11 +3,11 @@ import { ApplicationRef } from '@angular/core';
 import { StartupService } from './startup.service';
 import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
-import { MessagesService } from '../messages/messages.service';
+import { MessagesService } from '@core/services/messages';
 import { of } from 'rxjs';
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { UserResponse } from '../../dto/userResponse';
+import { UserResponse } from '@core/dto/userResponse';
 
 describe('StartupService', () => {
   let service: StartupService;

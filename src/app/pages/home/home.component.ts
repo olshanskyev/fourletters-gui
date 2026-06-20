@@ -3,7 +3,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatInputModule } from '@angular/material/input';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { GoogleAuthService, VKAuthService } from '../../core/services';
+import { GoogleAuthService, VKAuthService } from '@core/services/authentication';
 
 @Component({
   selector: 'app-home',

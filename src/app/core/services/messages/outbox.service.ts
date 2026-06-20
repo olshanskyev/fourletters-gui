@@ -1,12 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
 import { LocalMessage } from './models/messages.model';
-import { ConversationsService } from '../conversations/conversations.service';
+import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { MessagesApiService } from './messages-api.service';
-import { AppDatabase } from '../database/app.database';
+import { AppDatabase } from '@core/services/database/app.database';
 import { SecureMessageService } from './secure-message.service';
 import { lastValueFrom } from 'rxjs';
-import { ConversationType, LocalConversation } from '../..';
+import { ConversationType, LocalConversation } from '@core/services/conversations/models/conversations.model';
 
 @Injectable({
   providedIn: 'root'
@@ -112,7 +112,7 @@ export class OutboxService {
   getReceipient(conversation: LocalConversation): string | undefined {
     return (conversation?.type === 'direct')?
        conversation.participants?.[0] :
-       conversation?.groupId
+       conversation?.groupId;
   }
 
   async sendMessage(

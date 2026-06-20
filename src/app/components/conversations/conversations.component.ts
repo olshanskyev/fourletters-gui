@@ -5,9 +5,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
-import { ListLayoutComponent } from '../../layouts/list-layout/list-layout.component';
+import { ListLayoutComponent } from '@layouts/list-layout/list-layout.component';
 import { UserButton } from '../widgets/user-button';
-import { ConversationsService } from '../../core/services/conversations';
+import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 
 @Component({

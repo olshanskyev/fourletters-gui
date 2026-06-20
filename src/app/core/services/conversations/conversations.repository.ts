@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { AppDatabase } from '../database/app.database';
+import { AppDatabase } from '@core/services/database/app.database';
 import { LocalConversation } from './models/conversations.model';
 import { liveQuery } from 'dexie';
 import { from, Observable } from 'rxjs';

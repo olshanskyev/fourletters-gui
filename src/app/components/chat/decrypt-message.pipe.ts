@@ -1,6 +1,6 @@
 import { Pipe, PipeTransform, inject } from '@angular/core';
-import { LocalMessage } from '../../core/services/messages/models/messages.model';
-import { SecureMessageService } from '../../core/services/messages/secure-message.service';
+import { LocalMessage } from '@core/services/messages/models/messages.model';
+import { MessagesService } from '@core/services/messages/messages.service';
 import { from, Observable, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
@@ -9,14 +9,14 @@ import { catchError } from 'rxjs/operators';
   standalone: true
 })
 export class DecryptMessagePipe implements PipeTransform {
-  private secureMsg = inject(SecureMessageService);
+  private messagesService = inject(MessagesService);
 
   transform(message: LocalMessage): Observable<string> {
     if (!message || !message.text) {
       return of('');
     }
 
-    return from(this.secureMsg.decryptFromAtRest(message.id, message.text)).pipe(
+    return from(this.messagesService.decryptFromAtRest(message.id, message.text)).pipe(
       catchError(e => {
         console.error('Failed to decrypt message in UI:', e);
         return of('**(Encrypted)**');
@@ -24,3 +24,4 @@ export class DecryptMessagePipe implements PipeTransform {
     );
   }
 }
+

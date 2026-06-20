@@ -4,7 +4,7 @@ import { NgComponentOutlet } from '@angular/common';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { MatSidenav, MatSidenavContent, MatSidenavModule } from '@angular/material/sidenav';
 import { Subscription } from 'rxjs/internal/Subscription';
-import { SidePanelService } from '../../core/services/shared/side-panel.service';
+import { SidePanelService } from '@core/services/shared';
 
 const MOBILE_MEDIAQUERY = 'screen and (max-width: 1279px)';
 const MONITOR_MEDIAQUERY = 'screen and (min-width: 1280px)';

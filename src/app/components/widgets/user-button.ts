@@ -6,7 +6,7 @@ import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { MatDividerModule } from '@angular/material/divider';
-import { AuthService } from '../../core';
+import { AuthService } from '@core/services/authentication/auth.service';
 
 @Component({
   selector: 'app-user-button',

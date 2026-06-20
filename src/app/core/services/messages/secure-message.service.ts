@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { CryptoService } from '../crypto/crypto.service';
-import { AppDatabase } from '../database/app.database';
-import { KeysApiService } from '../crypto/keys-api.service';
-import { AuthService } from '../authentication/auth.service';
+import { CryptoService } from '@core/services/crypto/crypto.service';
+import { AppDatabase } from '@core/services/database/app.database';
+import { KeysApiService } from '@core/services/crypto/keys-api.service';
+import { AuthService } from '@core/services/authentication/auth.service';
 import { lastValueFrom } from 'rxjs';
 
 @Injectable({

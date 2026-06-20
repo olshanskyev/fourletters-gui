@@ -75,9 +75,10 @@ The application follows a standard Angular architecture with the following key c
 ### Additional Coding Preferences
 - Keep project dependencies minimal
 - Use styles already defined in project
-- Use relative imports and NOT a path alias
+- Use relative imports for neigbors and path aliases for outer packages
 - Use apostrophes for strings declarations
 - Use angular material components where possible
 - Use angular material color variables
 - use @for and @if, and not *ngIf and *ngFor
 - use css classes like "d-flex flex-col p-8 ..." instead of custom classes
+- do not modify objects inside dto folder

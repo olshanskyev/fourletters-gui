@@ -9,15 +9,15 @@ import { HttpClient, HttpErrorResponse, HttpStatusCode } from '@angular/common/h
 import { VKAuthService, VKTokenResult } from './onetap/vk-auth.service';
 import { GoogleAuthService, GoogleTokenResult } from './onetap/google-auth.service';
 
-import { UserResponse } from '../../dto/userResponse';
-import { AuthResponse } from '../../dto/authResponse';
-import { AuthRequest } from '../../dto/authRequest';
+import { UserResponse } from '@dto/models';
+import { AuthResponse } from '@dto/models';
+import { AuthRequest } from '@dto/models';
 import { TokenReader } from './token-reader';
-import { SettingsService } from '../shared/settings.service';
-import { AppDatabase } from '../database/app.database';
-import { RegistryDatabase } from '../database/registry.database';
-import { IdentityService } from '../crypto/identity.service';
-import { RefreshErrorReasonEnum } from '../../dto/refreshError';
+import { SettingsService } from '@core/services/shared';
+import { AppDatabase } from '@core/services/database/app.database';
+import { RegistryDatabase } from '@core/services/database/registry.database';
+import { IdentityService } from '@core/services/crypto/identity.service';
+import { RefreshErrorReasonEnum } from '@dto/models';
 
 @Injectable({
   providedIn: 'root',

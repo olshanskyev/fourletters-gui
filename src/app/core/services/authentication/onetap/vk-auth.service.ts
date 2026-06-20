@@ -2,8 +2,8 @@ import { ElementRef, inject, Injectable } from '@angular/core';
 
 import * as VKID from '@vkid/sdk';
 
-import { SettingsService } from '../../shared/settings.service';
-import { environment } from '../../../../../environments/environment';
+import { SettingsService } from '@core/services/shared';
+import { environment } from '@env/environment';
 import { OneTapProvider } from './onetap-provider';
 
 export type VKTokenResult = Omit<VKID.TokenResult, 'id_token'>;

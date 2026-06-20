@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { CryptoService } from './crypto.service';
 import { KeysApiService } from './keys-api.service';
 import { AppDatabase } from '../database/app.database';
-import { KeysUploadRequest } from '../../dto/keysUploadRequest';
+import { KeysUploadRequest } from '@dto/models';
 import { lastValueFrom } from 'rxjs';
 
 @Injectable({

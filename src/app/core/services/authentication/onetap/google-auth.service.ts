@@ -1,7 +1,7 @@
-import { ElementRef, inject, Injectable, signal } from '@angular/core';
+import { ElementRef, inject, Injectable } from '@angular/core';
 
-import { SettingsService } from '../../shared/settings.service';
-import { environment } from '../../../../../environments/environment';
+import { SettingsService } from '@core/services/shared';
+import { environment } from '@env/environment';
 
 import * as GOOGLE from 'google-one-tap';
 import { OneTapProvider } from './onetap-provider';

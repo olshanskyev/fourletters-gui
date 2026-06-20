@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import Dexie, { Table } from 'dexie';
-import { LocalMessage } from '../messages/models/messages.model';
-import { LocalConversation } from '../conversations/models/conversations.model';
+import { LocalMessage } from '@core/services/messages';
+import { LocalConversation } from '@core/services/conversations';
 
 export type MetaRecords = 'serverStartedAt' | 'dbMasterKey';
 export interface MetaRecord {
