@@ -3,9 +3,9 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
-import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData } from '@dto/models';
+import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData, GroupKeyEvent, GroupKeyEventEventEnum, GroupKeyNotification } from '@dto/models';
 
-export type HubEvent = MessageEvent | ReceiptEvent;
+export type HubEvent = MessageEvent | ReceiptEvent | GroupKeyEvent;
 
 @Injectable({
   providedIn: 'root'
@@ -17,6 +17,7 @@ export class HubService implements OnDestroy {
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
   private readonly messageReadSubject = new Subject<ReceiptData>();
+  private readonly groupKeyRotatedSubject = new Subject<GroupKeyNotification>();
 
   public connect(): void {
     if (this.socket$ && !this.socket$.closed) {
@@ -47,6 +48,9 @@ export class HubService implements OnDestroy {
             case ReceiptEventEventEnum.MessageRead:
               this.messageReadSubject.next(message.data as ReceiptData);
               break;
+            case GroupKeyEventEventEnum.GroupKeyRotated:
+              this.groupKeyRotatedSubject.next(message.data as GroupKeyNotification);
+              break;
           }
         }
       },
@@ -65,6 +69,10 @@ export class HubService implements OnDestroy {
 
   public get messageRead(): Observable<ReceiptData> {
     return this.messageReadSubject.asObservable();
+  }
+
+  public get groupKeyRotated(): Observable<GroupKeyNotification> {
+    return this.groupKeyRotatedSubject.asObservable();
   }
 
 

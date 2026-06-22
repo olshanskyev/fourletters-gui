@@ -6,7 +6,7 @@ import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
 import { UserResponse } from '@core/dto/userResponse';
 import { MessagesService } from '@core/services/messages/messages.service';
-import { IdentityService } from '../crypto/identity.service';
+import { IdentityService } from '@core/services/identity/identity.service';
 
 @Injectable({
   providedIn: 'root',

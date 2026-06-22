@@ -7,10 +7,15 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { KeysResponse } from './keysResponse';
 
 
-export interface PublicKeysBatchResponse { 
-    results: Array<KeysResponse>;
+/**
+ * Lightweight group descriptor for list views.
+ */
+export interface GroupSummary { 
+    id: string;
+    name: string;
+    ownerId: string;
+    epoch: number;
 }
 

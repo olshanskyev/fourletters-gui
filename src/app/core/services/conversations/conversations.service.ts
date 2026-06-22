@@ -33,12 +33,21 @@ export class ConversationsService {
   }
 
   /**
+   * Finds the local conversation backing a server-side group.
+   */
+  async getGroupConversation(groupId: string): Promise<LocalConversation | undefined> {
+    const all = await this.repository.getAllConversations();
+    return all.find(c => c.type === 'group' && c.groupId === groupId);
+  }
+
+  /**
    * Create a new conversation
    */
   async createConversation(
     name: string,
-    type: ConversationType = 'direct',
-    participants: string[] = []
+    type: ConversationType,
+    participants: string[] = [],
+    groupId?: string
   ): Promise<LocalConversation> {
     const id = crypto.randomUUID();
     const conversation: LocalConversation = {
@@ -46,6 +55,7 @@ export class ConversationsService {
       name,
       type,
       participants,
+      groupId,
       unreadCount: 0,
       updatedAt: Date.now(),
     };

@@ -2,16 +2,15 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import { 
-  EncryptedMessage, 
-  AcceptedResponse, 
-  InboxResponse, 
-  DeliveryReceipt, 
-  MessageBatchRequest, 
-  MessageBatchResponse, 
-  ReceiptType 
+import {
+  EncryptedMessage,
+  AcceptedResponse,
+  InboxResponse,
+  DeliveryReceipt,
+  MessageBatchRequest,
+  MessageBatchResponse,
+  ReceiptType
 } from '@dto/models';
-import { ConversationType } from '@core/services/conversations';
 
 /**
  * REST client for the Server's message endpoints
@@ -22,23 +21,33 @@ import { ConversationType } from '@core/services/conversations';
 export class MessagesApiService {
   private readonly httpClient = inject(HttpClient);
 
-  /**
-   * Send a message to a recipient. Returns the Server's acceptance (messageId + seq).
-   * @param recipientId the recipient user id
-   * @param payload the encrypted E2E message body
-   * @param signature the ECDSA signature of the payload
-   * @param messageId optional client-generated id; one is created if omitted
-   */
   sendMessage(
     recipientId: string,
     payload: string,
     signature: string,
-    messageId: string = crypto.randomUUID(),
-    receipientType: ConversationType = 'direct' // toDo: group sending
+    messageId: string = crypto.randomUUID()
   ): Observable<AcceptedResponse> {
     const message: EncryptedMessage = {
       messageId,
       recipientId,
+      payload,
+      signature
+    };
+    return this.httpClient.post<AcceptedResponse>('/messages', message);
+  }
+
+  sendGroupMessage(
+    groupId: string,
+    epoch: number,
+    payload: string,
+    signature: string,
+    messageId: string = crypto.randomUUID()
+  ): Observable<AcceptedResponse> {
+    const message: EncryptedMessage = {
+      messageId,
+      recipientId: groupId,
+      groupId,
+      epoch,
       payload,
       signature
     };

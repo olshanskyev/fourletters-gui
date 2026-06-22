@@ -9,13 +9,17 @@
  */
 
 
-export interface UserResponse { 
-    id: string;
-    username: string;
-    avatarUrl?: string;
+/**
+ * A member of a group.
+ */
+export interface GroupMember { 
     /**
-     * List of user permissions/roles for RBAC.
+     * The member\'s user id.
      */
-    roles: Array<string>;
+    userId: string;
+    /**
+     * Epoch milliseconds when the member joined the group.
+     */
+    joinedAt?: number;
 }
 

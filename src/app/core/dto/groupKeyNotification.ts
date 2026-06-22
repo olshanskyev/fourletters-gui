@@ -9,13 +9,17 @@
  */
 
 
-export interface UserResponse { 
-    id: string;
-    username: string;
-    avatarUrl?: string;
+/**
+ * Payload of a groupKeyRotated WS event.
+ */
+export interface GroupKeyNotification { 
     /**
-     * List of user permissions/roles for RBAC.
+     * The group whose key rotated.
      */
-    roles: Array<string>;
+    groupId: string;
+    /**
+     * The new current epoch.
+     */
+    epoch: number;
 }
 

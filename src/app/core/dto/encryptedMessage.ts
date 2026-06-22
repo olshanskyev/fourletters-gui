@@ -23,12 +23,20 @@ export interface EncryptedMessage {
      */
     senderId?: string;
     /**
-     * E2E encrypted message payload (Base64)
+     * E2E encrypted message payload (Base64). For a 1:1 message this is per-message ephemeral-ECDH ciphertext; for a group message it is ciphertext under the group\'s symmetric epoch key.
      */
     payload: string;
     /**
      * Detached signature over the payload produced by the sender\'s identity key (Base64). Verified end-to-end by the recipient against the public-key directory.
      */
     signature: string;
+    /**
+     * Present only for group messages. Identifies the group; the Server uses it to resolve the roster and fan out one stored copy per member. Omitted for 1:1 messages.
+     */
+    groupId?: string;
+    /**
+     * Present only for group messages. The group-key epoch (version) the payload was encrypted under, so the recipient selects the matching key. Omitted for 1:1 messages.
+     */
+    epoch?: number;
 }
 

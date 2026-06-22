@@ -4,7 +4,8 @@ export interface LocalMessage {
   id: string;
   conversationId: string;
   senderId: string;
-  recipientId?: string; // Target user when sending a direct message
+  recipientId?: string; // The 1:1 peer (direct messages only); absent for group messages
+  groupId?: string; // Set for group messages only; the discriminator between direct and group
   text: string;
   isMine: boolean;
   createdAt: number;

@@ -5,7 +5,7 @@ export interface LocalConversation {
   name: string;
   type: ConversationType;
   participants: string[];
-  groupId?: string; // For group conversations, an optional ID for server-side grouping
+  groupId?: string; // For group conversations
   lastMessageText?: string;
   lastMessageAt?: number;
   unreadCount: number;

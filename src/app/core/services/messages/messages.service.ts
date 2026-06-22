@@ -7,8 +7,9 @@ import { HubService } from './ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
 import { OutboxService } from './outbox.service';
 import { ReceiptType, EncryptedMessage, ReceiptData } from '@dto/models';
-import { AppDatabase } from '@core/services/database/app.database';
+import { SyncStateRepository } from './sync-state.repository';
 import { SecureMessageService } from './secure-message.service';
+import { GroupsService } from '@core/services/groups/groups.service';
 
 @Injectable({
   providedIn: 'root'
@@ -19,12 +20,14 @@ export class MessagesService {
   private hubService = inject(HubService);
   private messagesApi = inject(MessagesApiService);
   private outboxService = inject(OutboxService);
-  private appDb = inject(AppDatabase);
+  private syncState = inject(SyncStateRepository);
   private secureMsg = inject(SecureMessageService);
+  private groupsService = inject(GroupsService);
 
   private incomingSubscription?: Subscription;
   private deliveredSubscription?: Subscription;
   private readSubscription?: Subscription;
+  private groupKeyRotatedSubscription?: Subscription;
 
   /**
    * Connect to the Hub and start handling incoming live messages. Idempotent.
@@ -60,13 +63,28 @@ export class MessagesService {
       })
     ).subscribe();
 
+    this.groupKeyRotatedSubscription = this.hubService.groupKeyRotated.pipe(
+      concatMap(async (notification) => {
+        try {
+          await this.groupsService.onGroupKeyRotated(notification);
+        } catch (err) {
+          console.error('Failed to handle group key rotation nudge:', err);
+        }
+      })
+    ).subscribe();
+
     // async initialization
     (async () => {
       try {
         // Sync inbox at startup
         const res = await lastValueFrom(this.messagesApi.fetchInbox());
         if (res.serverStartedAt) {
-          await this.appDb.setMeta('serverStartedAt', res.serverStartedAt);
+          await this.syncState.setServerStartedAt(res.serverStartedAt);
+        }
+
+        // Unseal any group keys distributed while we were offline before draining messages
+        if (res.groupKeys?.length) {
+          await this.groupsService.handleIncomingGroupKeys(res.groupKeys);
         }
 
         // Save unread messages from inbox
@@ -114,54 +132,80 @@ export class MessagesService {
       return;
     }
 
+    const { senderId, messageId } = encryptedMessage;
+
     try {
-      // 1. Unpack E2E Payload (Verify Signature & Decrypt ECDH->AES)
-      const plaintext = await this.secureMsg.unpackIncomingPayload(
-        encryptedMessage.senderId,
-        encryptedMessage.payload,
-        encryptedMessage.signature
-      );
+      // 1. Verify the sender's signature and decrypt (group key recovered from Server if missing)
+      const plaintext = await this.decryptIncoming(encryptedMessage);
 
-      // 2. Encrypt for Local IndexedDB storage (AES Master Key)
-      const ciphertextAtRest = await this.secureMsg.encryptForAtRest(
-        encryptedMessage.messageId,
-        plaintext
-      );
+      // 2. Resolve the target conversation (direct or group), creating it if unknown
+      const conversationId = await this.resolveIncomingConversation(encryptedMessage);
 
-      const localMessage = await this.saveIncomingMessage(
-        encryptedMessage.senderId,
-        encryptedMessage.recipientId,
-        ciphertextAtRest,
-        false,
-        encryptedMessage.messageId
-      );
+      // 3. Re-encrypt at-rest and persist locally
+      const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, plaintext);
+      await this.saveIncomingMessage(encryptedMessage, conversationId, ciphertextAtRest);
 
-      // Update preview to plaintext
-      await this.conversationsService.updateLastMessage(
-        localMessage.conversationId,
-        plaintext,
-        Date.now()
-      );
+      // 4. Refresh the conversation preview with the plaintext
+      await this.conversationsService.updateLastMessage(conversationId, plaintext, Date.now());
 
-      // 3. Confirm delivery dynamically signing the receipt
-      const receiptSignature = await this.secureMsg.signReceipt(
-        encryptedMessage.messageId, ReceiptType.Delivered, encryptedMessage.senderId
-      );
-
-      try {
-        await lastValueFrom(
-          this.messagesApi.sendReceipt(
-            encryptedMessage.messageId,
-            encryptedMessage.senderId,
-            receiptSignature
-          )
-        );
-      } catch (err) {
-        console.error('Failed to send delivery receipt:', err);
-      }
-
+      // 5. Confirm delivery to the original sender
+      await this.acknowledgeDelivery(messageId, senderId);
     } catch (err) {
-      console.warn('E2E validation or decryption failed for message', encryptedMessage.messageId, err);
+      console.warn('Failed to process incoming message', messageId, err);
+    }
+  }
+
+  /**
+   * Verify and decrypt an incoming message, dispatching on whether it is a group or 1:1 payload.
+   */
+  private async decryptIncoming(encryptedMessage: EncryptedMessage | any): Promise<string> {
+    const { groupId, epoch, senderId, payload, signature } = encryptedMessage;
+
+    if (groupId) {
+      return this.secureMsg.unpackIncomingGroupPayload(groupId, epoch, senderId, payload, signature);
+    }
+    return this.secureMsg.unpackIncomingPayload(senderId, payload, signature);
+  }
+
+  /**
+   * Find (or lazily create) the local conversation an incoming message belongs to. Group messages
+   */
+  private async resolveIncomingConversation(encryptedMessage: EncryptedMessage | any): Promise<string> {
+    const { groupId, senderId } = encryptedMessage;
+
+    if (groupId) {
+      const existing = await this.conversationsService.getGroupConversation(groupId);
+      if (existing) {
+        return existing.id;
+      }
+      // ToDo - fetch group metadata?
+      const created = await this.conversationsService.createConversation('Group', 'group', [senderId], groupId);
+      return created.id;
+    }
+
+    const existing = await this.conversationsService.getDirectConversationWith(senderId);
+    if (existing) {
+      return existing.id;
+    }
+    // ToDo - fetch contact info?
+    const created = await this.conversationsService.createConversation('Unknown Contact', 'direct', [senderId]);
+    return created.id;
+  }
+
+  /**
+   * Sign and send a delivery receipt for a received message back to its original sender.
+   */
+  private async acknowledgeDelivery(messageId: string, senderId: string): Promise<void> {
+    const receiptSignature = await this.secureMsg.signReceipt(
+      messageId, ReceiptType.Delivered, senderId
+    );
+
+    try {
+      await lastValueFrom(
+        this.messagesApi.sendReceipt(messageId, senderId, receiptSignature)
+      );
+    } catch (err) {
+      console.error('Failed to send delivery receipt:', err);
     }
   }
 
@@ -177,6 +221,9 @@ export class MessagesService {
 
     this.readSubscription?.unsubscribe();
     this.readSubscription = undefined;
+
+    this.groupKeyRotatedSubscription?.unsubscribe();
+    this.groupKeyRotatedSubscription = undefined;
 
     this.hubService.disconnect();
     this.secureMsg.clearMemory();
@@ -234,51 +281,26 @@ export class MessagesService {
   }
 
   /**
-   * Save an incoming message to the database
+   * Persist an incoming message to the local store. {@code recipientId} is carried for 1:1
+   * messages, while {@code groupId} marks (and identifies) group messages.
    */
   private async saveIncomingMessage(
-    senderId: string,
-    recipientId: string,
-    text: string,
-    isMine: boolean,
-    externalMessageId: string)
-  : Promise<LocalMessage> {
-    // Find if we already have a conversation with this person
-
-    //ToDo: add group conversation support
-    let conversationId: string;
-    // currently only direct conversations are supported
-    const existingConvo = await this.conversationsService.getDirectConversationWith(senderId);
-
-    if (existingConvo) {
-      conversationId = existingConvo.id;
-    } else {
-      // Create a brand new UUID for this incoming conversation
-      const newConvo = await this.conversationsService.createConversation(
-        'Unknown Contact',
-        'direct',
-        [senderId]
-      );
-      conversationId = newConvo.id;
-    }
-
-    const time = Date.now();
+    encryptedMessage: EncryptedMessage | any,
+    conversationId: string,
+    atRestText: string
+  ): Promise<LocalMessage> {
     const message: LocalMessage = {
-      id: externalMessageId, // Real external message id
+      id: encryptedMessage.messageId, // Real external message id
       conversationId,
-      senderId,
-      recipientId,
-      text,
-      isMine,
-      createdAt: time
+      senderId: encryptedMessage.senderId,
+      recipientId: encryptedMessage.recipientId,
+      groupId: encryptedMessage.groupId,
+      text: atRestText,
+      isMine: false,
+      createdAt: Date.now()
     };
 
-    // Save to DB
     await this.repository.addMessage(message);
-
-    // Refresh conversation latest info
-    await this.conversationsService.updateLastMessage(conversationId, text, time);
-
     return message;
   }
 

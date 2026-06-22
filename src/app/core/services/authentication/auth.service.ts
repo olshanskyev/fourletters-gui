@@ -16,7 +16,7 @@ import { TokenReader } from './token-reader';
 import { SettingsService } from '@core/services/shared';
 import { AppDatabase } from '@core/services/database/app.database';
 import { RegistryDatabase } from '@core/services/database/registry.database';
-import { IdentityService } from '@core/services/crypto/identity.service';
+import { IdentityService } from '@core/services/identity/identity.service';
 import { RefreshErrorReasonEnum } from '@dto/models';
 
 @Injectable({

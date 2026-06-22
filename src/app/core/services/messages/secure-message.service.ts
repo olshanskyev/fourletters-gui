@@ -1,9 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { CryptoService } from '@core/services/crypto/crypto.service';
-import { AppDatabase } from '@core/services/database/app.database';
-import { KeysApiService } from '@core/services/crypto/keys-api.service';
+import { CryptoService } from '@core/services/crypto';
+import { MessagesRepository } from './messages.repository';
+import { ContactsService } from '@core/services/contacts';
+import { IdentityService } from '@core/services/identity';
 import { AuthService } from '@core/services/authentication/auth.service';
-import { lastValueFrom } from 'rxjs';
+import { GroupKeyService } from '@core/services/groups/group-key.service';
+import { GroupsService } from '@core/services/groups/groups.service';
 
 @Injectable({
   providedIn: 'root'
@@ -11,31 +13,14 @@ import { lastValueFrom } from 'rxjs';
 export class SecureMessageService {
   static readonly MAX_CACHE_SIZE = 200;
   private crypto = inject(CryptoService);
-  private appDb = inject(AppDatabase);
-  private keysApi = inject(KeysApiService);
+  private messagesRepo = inject(MessagesRepository);
+  private contacts = inject(ContactsService);
+  private identity = inject(IdentityService);
   private authService = inject(AuthService);
+  private groupKeys = inject(GroupKeyService);
+  private groups = inject(GroupsService);
 
   private memoryCache = new Map<string, string>(); // messageId -> plaintext cache
-
-  /**
-   * Fetches (from directory or local cache) and returns a user's Public Keys.
-   */
-  async getContactKeys(userId: string) {
-    let contact = await this.appDb.contacts.get(userId);
-    if (!contact) {
-      const remoteKeys = await lastValueFrom(this.keysApi.getUserKeys(userId));
-      const signingPublicKey = await this.crypto.importIdentityPublicKey(
-        remoteKeys.keys.signingPublicKey
-      );
-      const encryptionPublicKey = await this.crypto.importEncryptionPublicKey(
-        remoteKeys.keys.encryptionPublicKey
-      );
-
-      contact = { id: userId, signingPublicKey, encryptionPublicKey };
-      await this.appDb.contacts.put(contact);
-    }
-    return contact;
-  }
 
   /**
    * E2E Encrypts and Signs an outgoing message payload.
@@ -44,18 +29,24 @@ export class SecureMessageService {
     recipientId: string,
     plaintext: string
   ): Promise<{ payload: string; signature: string }> {
-    const contact = await this.getContactKeys(recipientId);
-
-    // 1. Encrypt text for recipient
+    const contact = await this.contacts.getContactKeys(recipientId);
     const e2ePayload = await this.crypto.encodeE2E(plaintext, contact.encryptionPublicKey);
-
-    // 2. Sign the cipher payload with our Identity Private Key
-    const myIdentityPair = await this.appDb.identity.get('identityKeyPair');
-    if (!myIdentityPair) throw new Error('Local identity keys missing.');
-
-    const signature = await this.crypto.sign(e2ePayload, myIdentityPair.value.privateKey);
-
+    const signature = await this.signWithIdentity(e2ePayload);
     return { payload: e2ePayload, signature };
+  }
+
+  /**
+   * Encrypts a group message once under the current epoch's sender-key and signs it with our
+   * identity key.
+   */
+  async buildOutgoingGroupPayload(
+    groupId: string,
+    plaintext: string
+  ): Promise<{ payload: string; signature: string; epoch: number }> {
+    const { key, epoch } = await this.groupKeys.ensureCurrentKey(groupId);
+    const payload = await this.crypto.encryptGroup(plaintext, key);
+    const signature = await this.signWithIdentity(payload);
+    return { payload, signature, epoch };
   }
 
   /**
@@ -66,21 +57,31 @@ export class SecureMessageService {
     payload: string,
     signature: string
   ): Promise<string> {
-    const contact = await this.getContactKeys(senderId);
-
     // 1. Verify signature
-    const isValid = await this.crypto.verify(payload, signature, contact.signingPublicKey);
-    if (!isValid) {
-      throw new Error(`Invalid signature from sender ${senderId}. Dropping payload.`);
-    }
+    await this.verifySender(senderId, payload, signature);
 
     // 2. Decrypt message
-    const myEncryptionPair = await this.appDb.identity.get('encryptionKeyPair');
-    if (!myEncryptionPair) throw new Error('Local encryption keys missing.');
-
-    const plaintext = await this.crypto.decodeE2E(payload, myEncryptionPair.value.privateKey);
-    return plaintext;
+    const myEncryptionPrivateKey = await this.identity.getEncryptionPrivateKey();
+    return this.crypto.decodeE2E(payload, myEncryptionPrivateKey);
   }
+
+  /**
+   * Verifies & Decrypts an incoming group message.
+   */
+  async unpackIncomingGroupPayload(
+    groupId: string,
+    epoch: number,
+    senderId: string,
+    payload: string,
+    signature: string
+  ): Promise<string> {
+    await this.verifySender(senderId, payload, signature);
+
+    const groupKey = await this.groupKeys.ensureKey(groupId, epoch);
+    return this.crypto.decryptGroup(payload, groupKey);
+  }
+
+
 
   /**
    * Memory-caches the plaintext and returns the at-rest AES-256 encrypted payload for storage.
@@ -88,10 +89,8 @@ export class SecureMessageService {
   async encryptForAtRest(messageId: string, plaintext: string): Promise<string> {
     this.memoryCache.set(messageId, plaintext);
 
-    const masterKeyRecord = await this.appDb.meta.get('dbMasterKey');
-    if (!masterKeyRecord) throw new Error('Missing AES-GCM Master Key.');
-
-    return this.crypto.encryptDB(plaintext, masterKeyRecord.value);
+    const masterKey = await this.identity.getDbMasterKey();
+    return this.crypto.encryptDB(plaintext, masterKey);
   }
 
   /**
@@ -102,10 +101,8 @@ export class SecureMessageService {
       return this.memoryCache.get(messageId)!;
     }
 
-    const masterKeyRecord = await this.appDb.meta.get('dbMasterKey');
-    if (!masterKeyRecord) throw new Error('Missing AES-GCM Master Key.');
-
-    const plaintext = await this.crypto.decryptDB(ciphertext, masterKeyRecord.value);
+    const masterKey = await this.identity.getDbMasterKey();
+    const plaintext = await this.crypto.decryptDB(ciphertext, masterKey);
 
     // Enforce loose LRU limit
     if (this.memoryCache.size > SecureMessageService.MAX_CACHE_SIZE) {
@@ -122,10 +119,7 @@ export class SecureMessageService {
    */
   async signReceipt(messageId: string, type: string, originalSenderId: string): Promise<string> {
     const payload = `${messageId}:${type}:${originalSenderId}`;
-    const myIdentityPair = await this.appDb.identity.get('identityKeyPair');
-    if (!myIdentityPair) throw new Error('Local identity keys missing.');
-
-    return this.crypto.sign(payload, myIdentityPair.value.privateKey);
+    return this.signWithIdentity(payload);
   }
 
   /**
@@ -144,19 +138,26 @@ export class SecureMessageService {
     }
 
     // Security check: ensure the receipt is actually from the person we sent the message to
-    const originalMessage = await this.appDb.messages.get(messageId);
+    const originalMessage = await this.messagesRepo.getMessageById(messageId);
     if (!originalMessage || !originalMessage.isMine) {
       console.warn(`Cannot verify receipt: outgoing message ${messageId} not found in local outbox.`);
       return false;
     }
 
-    if (originalMessage.recipientId !== receiptSenderId) {
+    if (originalMessage.groupId) {
+      // Group message: any current member may legitimately acknowledge — authorize by roster membership.
+      const isMember = await this.groups.isMember(originalMessage.groupId, receiptSenderId);
+      if (!isMember) {
+        console.warn(`Forged group receipt rejected! ${receiptSenderId} is not a member of group ${originalMessage.groupId}.`);
+        return false;
+      }
+    } else if (originalMessage.recipientId !== receiptSenderId) {
       console.warn(`Forged receipt rejected! Expected receipt from ${originalMessage.recipientId}, but got it from ${receiptSenderId}.`);
       return false;
     }
 
     const payload = `${messageId}:${type}:${myId}`; // Our ID (the original sender)
-    const contact = await this.getContactKeys(receiptSenderId); // The sender of the receipt
+    const contact = await this.contacts.getContactKeys(receiptSenderId); // The sender of the receipt
 
     return this.crypto.verify(payload, signature, contact.signingPublicKey);
   }
@@ -166,5 +167,22 @@ export class SecureMessageService {
    */
   clearMemory() {
     this.memoryCache.clear();
+  }
+
+  // --- Shared key helpers ---------------------------------------------------------------
+
+  /** Signs a payload with our long-lived identity private key. */
+  private async signWithIdentity(payload: string): Promise<string> {
+    const signingPrivateKey = await this.identity.getSigningPrivateKey();
+    return this.crypto.sign(payload, signingPrivateKey);
+  }
+
+  /** Verifies a payload's signature against a sender's directory signing key; throws if invalid. */
+  private async verifySender(senderId: string, payload: string, signature: string): Promise<void> {
+    const contact = await this.contacts.getContactKeys(senderId);
+    const isValid = await this.crypto.verify(payload, signature, contact.signingPublicKey);
+    if (!isValid) {
+      throw new Error(`Invalid signature from sender ${senderId}. Dropping payload.`);
+    }
   }
 }
