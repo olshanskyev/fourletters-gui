@@ -25,31 +25,15 @@ export class MessagesApiService {
     recipientId: string,
     payload: string,
     signature: string,
-    messageId: string = crypto.randomUUID()
+    messageId: string = crypto.randomUUID(),
+    groupId?: string
   ): Observable<AcceptedResponse> {
     const message: EncryptedMessage = {
       messageId,
       recipientId,
       payload,
-      signature
-    };
-    return this.httpClient.post<AcceptedResponse>('/messages', message);
-  }
-
-  sendGroupMessage(
-    groupId: string,
-    epoch: number,
-    payload: string,
-    signature: string,
-    messageId: string = crypto.randomUUID()
-  ): Observable<AcceptedResponse> {
-    const message: EncryptedMessage = {
-      messageId,
-      recipientId: groupId,
-      groupId,
-      epoch,
-      payload,
-      signature
+      signature,
+      ...(groupId ? { groupId } : {})
     };
     return this.httpClient.post<AcceptedResponse>('/messages', message);
   }

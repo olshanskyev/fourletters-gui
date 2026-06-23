@@ -92,6 +92,16 @@ export class CryptoService {
     );
   }
 
+  /**
+   * Computes a stable fingerprint of a contact's public-key pair: SHA-256 over the two Base64
+   * SPKI keys (signing then encryption).
+   */
+  async fingerprintPublicKeys(signingPublicKeyB64: string, encryptionPublicKeyB64: string): Promise<string> {
+    const data = this.encoder.encode(`${signingPublicKeyB64}.${encryptionPublicKeyB64}`);
+    const digest = await window.crypto.subtle.digest(CryptoService.HASH_SHA256, data);
+    return Base64.bufferToBase64(digest);
+  }
+
   // --- E2E Sign / Verify ---
 
   async sign(payload: string, privateKey: CryptoKey): Promise<string> {
@@ -208,88 +218,6 @@ export class CryptoService {
     const decrypted = await window.crypto.subtle.decrypt(
       { name: CryptoService.ALG_AES_GCM, iv },
       masterKey,
-      ciphertext
-    );
-
-    return this.decoder.decode(decrypted);
-  }
-
-  // --- Group Sender-Key (symmetric epoch key + per-recipient wrapping) ---
-
-  /**
-   * Generates an AES-GCM 256-bit symmetric group key for one epoch. Extractable so it can be
-   * wrapped (sealed) to each member's encryption key before distribution; the wrapped blobs are
-   * what leave the device, never the raw key.
-   */
-  async generateGroupKey(): Promise<CryptoKey> {
-    return await window.crypto.subtle.generateKey(
-      { name: CryptoService.ALG_AES_GCM, length: CryptoService.KEY_LEN_256 },
-      true, // extractable so it can be sealed per-recipient
-      CryptoService.USAGE_ENCRYPT_DECRYPT
-    );
-  }
-
-  /**
-   * Seals a group key to a single member by exporting its raw bytes and encrypting them to the
-   * recipient's ECDH encryption key, reusing the same ephemeral-ECDH + AES-GCM envelope as 1:1
-   * payloads. Returns the wrapped blob "ephemeralPubB64.ivB64.cipherB64".
-   */
-  async wrapGroupKeyFor(groupKey: CryptoKey, recipientPublicKey: CryptoKey): Promise<string> {
-    const raw = await window.crypto.subtle.exportKey(CryptoService.FORMAT_RAW, groupKey);
-    const rawB64 = Base64.bufferToBase64(raw);
-    return this.encodeE2E(rawB64, recipientPublicKey);
-  }
-
-  /**
-   * Unseals a wrapped group key blob with the caller's ECDH private key and imports the recovered
-   * bytes as a non-extractable AES-GCM key usable only for group encrypt/decrypt.
-   */
-  async unwrapGroupKey(wrappedKey: string, myPrivateKey: CryptoKey): Promise<CryptoKey> {
-    const rawB64 = await this.decodeE2E(wrappedKey, myPrivateKey);
-    const raw = Base64.base64ToBuffer(rawB64);
-    return await window.crypto.subtle.importKey(
-      CryptoService.FORMAT_RAW,
-      raw,
-      { name: CryptoService.ALG_AES_GCM, length: CryptoService.KEY_LEN_256 },
-      false, // non-extractable once recovered
-      CryptoService.USAGE_ENCRYPT_DECRYPT
-    );
-  }
-
-  /**
-   * Encrypts a group message once under the shared epoch key. Returns "ivB64.cipherB64"; the epoch
-   * that selects this key is carried alongside the message, not inside the payload.
-   */
-  async encryptGroup(plaintext: string, groupKey: CryptoKey): Promise<string> {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const data = this.encoder.encode(plaintext);
-    const ciphertext = await window.crypto.subtle.encrypt(
-      { name: CryptoService.ALG_AES_GCM, iv },
-      groupKey,
-      data
-    );
-
-    const ivB64 = Base64.bufferToBase64(iv.buffer);
-    const cipherB64 = Base64.bufferToBase64(ciphertext);
-    return `${ivB64}.${cipherB64}`;
-  }
-
-  /**
-   * Decrypts a group message ("ivB64.cipherB64") with the shared epoch key.
-   */
-  async decryptGroup(payload: string, groupKey: CryptoKey): Promise<string> {
-    const parts = payload.split('.');
-    if (parts.length !== 2) {
-      throw new Error('Invalid group payload format');
-    }
-
-    const [ivB64, cipherB64] = parts;
-    const iv = new Uint8Array(Base64.base64ToBuffer(ivB64));
-    const ciphertext = Base64.base64ToBuffer(cipherB64);
-
-    const decrypted = await window.crypto.subtle.decrypt(
-      { name: CryptoService.ALG_AES_GCM, iv },
-      groupKey,
       ciphertext
     );
 

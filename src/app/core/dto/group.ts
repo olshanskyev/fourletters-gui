@@ -11,7 +11,7 @@ import { GroupMember } from './groupMember';
 
 
 /**
- * A group conversation. The Server owns the roster and the current epoch number but never the group key (it only relays opaque wrapped key blobs).
+ * A group conversation. The Server owns the roster; messages are sent as one independent 1:1 copy per member, so the Server never holds any group key material.
  */
 export interface Group { 
     /**
@@ -23,13 +23,9 @@ export interface Group {
      */
     name: string;
     /**
-     * The group owner — the sole party permitted to change the roster and publish rotations.
+     * The group owner — the sole party permitted to change the roster.
      */
     ownerId: string;
-    /**
-     * The current group-key epoch (version). Incremented on every rotation (membership change or owner-initiated rekey).
-     */
-    epoch: number;
     /**
      * The current roster.
      */
@@ -39,7 +35,7 @@ export interface Group {
      */
     createdAt?: number;
     /**
-     * Epoch milliseconds of the last roster/epoch change.
+     * Epoch milliseconds of the last roster change.
      */
     updatedAt?: number;
 }

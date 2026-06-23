@@ -7,11 +7,10 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { WrappedGroupKey } from './wrappedGroupKey';
 
 
 /**
- * Creates a group with the caller as owner and an initial epoch-0 key set wrapped to every member.
+ * Creates a group with the caller as owner and the given initial roster.
  */
 export interface CreateGroupRequest { 
     /**
@@ -22,9 +21,5 @@ export interface CreateGroupRequest {
      * Initial member user ids (the owner is added automatically if omitted).
      */
     members: Array<string>;
-    /**
-     * Epoch-0 group key wrapped to every initial member (including the owner).
-     */
-    keys: Array<WrappedGroupKey>;
 }
 

@@ -33,6 +33,6 @@ export class ConversationsComponent {
   conversations = toSignal(this.conversationsService.observeConversations(), { initialValue: [] });
 
   constructor() {
-    //this.conversationsService.createConversation('NAME', 'direct', ['01725568-05f3-40ae-905f-20456f33ec73']);
+    //this.conversationsService.createConversation('NAME', 'direct', ['3bc7f503-e4d7-4edc-998f-cfa5e38cf986']);
   }
 }

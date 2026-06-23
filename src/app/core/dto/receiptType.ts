@@ -10,12 +10,14 @@
 
 
 /**
- * \'delivered\' = the recipient device received and decrypted the message; \'read\' = the user opened it.
+ * \'delivered\' = the recipient device received and decrypted the message; \'read\' = the user opened it; \'undecryptable\' = the recipient received it but could not decrypt it (the message was encrypted to a stale public key, e.g. after the recipient logged in on a new device). A negative acknowledgement: it lets the Server drop the retained copy (no one can decrypt it) and prompts the original sender to re-fetch the recipient\'s current key and resend once.
  */
 export enum ReceiptType {
 
     Delivered = 'delivered',
 
-    Read = 'read'
+    Read = 'read',
+
+    Undecryptable = 'undecryptable'
 }
 

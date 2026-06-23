@@ -4,8 +4,19 @@ import { MessagesRepository } from './messages.repository';
 import { ContactsService } from '@core/services/contacts';
 import { IdentityService } from '@core/services/identity';
 import { AuthService } from '@core/services/authentication/auth.service';
-import { GroupKeyService } from '@core/services/groups/group-key.service';
 import { GroupsService } from '@core/services/groups/groups.service';
+
+/**
+ * Thrown when an incoming 1:1 payload's signature is valid but it cannot be decrypted — it was
+ * sealed to a stale encryption key (we rotated keys on a new device).
+ */
+export class UndecryptableError extends Error {
+  constructor(public readonly senderId: string, cause?: unknown) {
+    super(`Cannot decrypt 1:1 payload from ${senderId} (sealed to a previous device key).`);
+    this.name = 'UndecryptableError';
+    this.cause = cause;
+  }
+}
 
 @Injectable({
   providedIn: 'root'
@@ -17,7 +28,6 @@ export class SecureMessageService {
   private contacts = inject(ContactsService);
   private identity = inject(IdentityService);
   private authService = inject(AuthService);
-  private groupKeys = inject(GroupKeyService);
   private groups = inject(GroupsService);
 
   private memoryCache = new Map<string, string>(); // messageId -> plaintext cache
@@ -36,20 +46,6 @@ export class SecureMessageService {
   }
 
   /**
-   * Encrypts a group message once under the current epoch's sender-key and signs it with our
-   * identity key.
-   */
-  async buildOutgoingGroupPayload(
-    groupId: string,
-    plaintext: string
-  ): Promise<{ payload: string; signature: string; epoch: number }> {
-    const { key, epoch } = await this.groupKeys.ensureCurrentKey(groupId);
-    const payload = await this.crypto.encryptGroup(plaintext, key);
-    const signature = await this.signWithIdentity(payload);
-    return { payload, signature, epoch };
-  }
-
-  /**
    * Verifies & Decrypts an incoming E2E message.
    */
   async unpackIncomingPayload(
@@ -60,28 +56,15 @@ export class SecureMessageService {
     // 1. Verify signature
     await this.verifySender(senderId, payload, signature);
 
-    // 2. Decrypt message
+    // 2. Decrypt message. A signature-valid payload that fails to decrypt was sealed to a stale
+    //    encryption key (we rotated on a new device) — surface it so the caller can NACK.
     const myEncryptionPrivateKey = await this.identity.getEncryptionPrivateKey();
-    return this.crypto.decodeE2E(payload, myEncryptionPrivateKey);
+    try {
+      return await this.crypto.decodeE2E(payload, myEncryptionPrivateKey);
+    } catch (err) {
+      throw new UndecryptableError(senderId, err);
+    }
   }
-
-  /**
-   * Verifies & Decrypts an incoming group message.
-   */
-  async unpackIncomingGroupPayload(
-    groupId: string,
-    epoch: number,
-    senderId: string,
-    payload: string,
-    signature: string
-  ): Promise<string> {
-    await this.verifySender(senderId, payload, signature);
-
-    const groupKey = await this.groupKeys.ensureKey(groupId, epoch);
-    return this.crypto.decryptGroup(payload, groupKey);
-  }
-
-
 
   /**
    * Memory-caches the plaintext and returns the at-rest AES-256 encrypted payload for storage.
@@ -157,9 +140,7 @@ export class SecureMessageService {
     }
 
     const payload = `${messageId}:${type}:${myId}`; // Our ID (the original sender)
-    const contact = await this.contacts.getContactKeys(receiptSenderId); // The sender of the receipt
-
-    return this.crypto.verify(payload, signature, contact.signingPublicKey);
+    return this.verifyWithPin(receiptSenderId, payload, signature); // The sender of the receipt
   }
 
   /**
@@ -179,10 +160,24 @@ export class SecureMessageService {
 
   /** Verifies a payload's signature against a sender's directory signing key; throws if invalid. */
   private async verifySender(senderId: string, payload: string, signature: string): Promise<void> {
-    const contact = await this.contacts.getContactKeys(senderId);
-    const isValid = await this.crypto.verify(payload, signature, contact.signingPublicKey);
-    if (!isValid) {
+    if (!(await this.verifyWithPin(senderId, payload, signature))) {
       throw new Error(`Invalid signature from sender ${senderId}. Dropping payload.`);
     }
+  }
+
+  /**
+   * Verify a signature against stored signing key. On failure, re-fetch the directory key once;
+   * an unchanged or still-failing key is a genuine bad signature, so we do not re-pin.
+   */
+  private async verifyWithPin(senderId: string, payload: string, signature: string): Promise<boolean> {
+    const contact = await this.contacts.getContactKeys(senderId);
+    if (await this.crypto.verify(payload, signature, contact.signingPublicKey)) {
+      return true;
+    }
+    const refreshed = await this.contacts.refreshContactKey(senderId);
+    if (refreshed.keyFingerprint === contact.keyFingerprint) {
+      return false; // key did not change → the signature is genuinely invalid
+    }
+    return this.crypto.verify(payload, signature, refreshed.signingPublicKey);
   }
 }

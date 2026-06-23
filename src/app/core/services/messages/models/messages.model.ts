@@ -1,4 +1,4 @@
-export type MessageStatus = 'pending' | 'accepted' | 'delivered' | 'read';
+export type MessageStatus = 'pending' | 'accepted' | 'delivered' | 'read' | 'failed';
 
 export interface LocalMessage {
   id: string;
@@ -12,4 +12,5 @@ export interface LocalMessage {
   status?: MessageStatus;
   serverStartedAt?: number; // For outbox resync when server restarts
   retryCount?: number;
+  nackResent?: boolean; // True once re-keyed and resent after an 'undecryptable' NACK (resend once)
 }

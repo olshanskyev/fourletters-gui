@@ -7,11 +7,10 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { WrappedGroupKey } from './wrappedGroupKey';
 
 
 /**
- * Owner-only roster change. Adding and/or removing members always rotates: the body carries the new epoch\'s full wrapped-key set for the resulting roster. Compare-and-swap on epoch.
+ * Owner-only roster change.
  */
 export interface UpdateMembersRequest { 
     /**
@@ -22,13 +21,5 @@ export interface UpdateMembersRequest {
      * User ids to remove from the roster.
      */
     remove?: Array<string>;
-    /**
-     * The new epoch (must equal current epoch + 1). Rejected with 409 on mismatch.
-     */
-    epoch: number;
-    /**
-     * The new epoch key wrapped to exactly the resulting roster (after add/remove).
-     */
-    keys: Array<WrappedGroupKey>;
 }
 

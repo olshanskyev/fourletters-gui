@@ -7,7 +7,6 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { GroupKeySet } from './groupKeySet';
 import { EncryptedMessage } from './encryptedMessage';
 import { MessageReceipt } from './messageReceipt';
 
@@ -21,10 +20,6 @@ export interface InboxResponse {
      * Pending delivery/read acknowledgements for messages this user sent, accumulated while the user was offline. Returned once and then cleared.
      */
     receipts?: Array<MessageReceipt>;
-    /**
-     * Wrapped group keys the caller is missing for groups they belong to — e.g. they were offline during a rotation or just joined. Each entry is the current epoch\'s key wrapped to the caller\'s encryption key. Folded into the inbox pull so reconnect is a single round-trip. Returned once and then cleared.
-     */
-    groupKeys?: Array<GroupKeySet>;
     /**
      * Epoch milliseconds at which this Server process started. A changed value across responses signals a restart, after which the client re-submits its unconfirmed outbox messages.
      */

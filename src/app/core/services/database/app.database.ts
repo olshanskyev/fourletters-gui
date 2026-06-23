@@ -19,24 +19,17 @@ export interface ContactRecord {
   id: string; // userId
   signingPublicKey: CryptoKey;
   encryptionPublicKey: CryptoKey;
+  keyFingerprint?: string; // SHA-256 of (signing ‖ encryption) public keys — the pinned identity
+  pinnedAt?: number; // epoch ms when keyFingerprint was last pinned
 }
 
-/** Locally cached group metadata: roster, owner, and the latest epoch the client knows about. */
+/** Locally cached group metadata: roster and owner. */
 export interface GroupRecord {
   id: string; // server-assigned groupId
   name: string;
   ownerId: string;
-  epoch: number;
   members: string[]; // roster user ids
   updatedAt: number; // epoch ms
-}
-
-/** One unwrapped symmetric group key, keyed by `${groupId}:${epoch}`. */
-export interface GroupKeyRecord {
-  id: string; // `${groupId}:${epoch}`
-  groupId: string;
-  epoch: number;
-  key: CryptoKey; // non-extractable AES-GCM key (structured-cloned into IndexedDB)
 }
 
 export class UserDatabase extends Dexie {
@@ -46,7 +39,6 @@ export class UserDatabase extends Dexie {
   contacts!: Table<ContactRecord, string>;
   meta!: Table<MetaRecord, string>;
   groups!: Table<GroupRecord, string>;
-  groupKeys!: Table<GroupKeyRecord, string>;
 
   constructor(userId: string) {
     super(`fourletters:${userId}`);
@@ -57,8 +49,7 @@ export class UserDatabase extends Dexie {
       identity: 'id',
       contacts: 'id',
       meta: 'id',
-      groups: 'id, ownerId',
-      groupKeys: 'id, groupId'
+      groups: 'id, ownerId'
     });
   }
 }
@@ -87,7 +78,6 @@ export class AppDatabase {
   get contacts() { return this.db.contacts; }
   get meta() { return this.db.meta; }
   get groups() { return this.db.groups; }
-  get groupKeys() { return this.db.groupKeys; }
 
   initialize(userId: string) {
     if (this._userId === userId && this._db) {

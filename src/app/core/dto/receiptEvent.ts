@@ -11,7 +11,7 @@ import { ReceiptData } from './receiptData';
 
 
 /**
- * WS push: a delivery/read notification relayed live to the original sender.
+ * WS push: a delivery/read/undecryptable notification relayed live to the original sender.
  */
 export interface ReceiptEvent { 
     event: ReceiptEventEventEnum;
@@ -19,7 +19,8 @@ export interface ReceiptEvent {
 }
 export enum ReceiptEventEventEnum {
     MessageDelivered = 'messageDelivered',
-    MessageRead = 'messageRead'
+    MessageRead = 'messageRead',
+    MessageUndecryptable = 'messageUndecryptable'
 };
 
 

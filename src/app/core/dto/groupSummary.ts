@@ -16,6 +16,5 @@ export interface GroupSummary {
     id: string;
     name: string;
     ownerId: string;
-    epoch: number;
 }
 

@@ -8,8 +8,7 @@ import { MessagesApiService } from './messages-api.service';
 import { OutboxService } from './outbox.service';
 import { ReceiptType, EncryptedMessage, ReceiptData } from '@dto/models';
 import { SyncStateRepository } from './sync-state.repository';
-import { SecureMessageService } from './secure-message.service';
-import { GroupsService } from '@core/services/groups/groups.service';
+import { SecureMessageService, UndecryptableError } from './secure-message.service';
 
 @Injectable({
   providedIn: 'root'
@@ -22,12 +21,11 @@ export class MessagesService {
   private outboxService = inject(OutboxService);
   private syncState = inject(SyncStateRepository);
   private secureMsg = inject(SecureMessageService);
-  private groupsService = inject(GroupsService);
 
   private incomingSubscription?: Subscription;
   private deliveredSubscription?: Subscription;
   private readSubscription?: Subscription;
-  private groupKeyRotatedSubscription?: Subscription;
+  private undecryptableSubscription?: Subscription;
 
   /**
    * Connect to the Hub and start handling incoming live messages. Idempotent.
@@ -63,12 +61,10 @@ export class MessagesService {
       })
     ).subscribe();
 
-    this.groupKeyRotatedSubscription = this.hubService.groupKeyRotated.pipe(
-      concatMap(async (notification) => {
-        try {
-          await this.groupsService.onGroupKeyRotated(notification);
-        } catch (err) {
-          console.error('Failed to handle group key rotation nudge:', err);
+    this.undecryptableSubscription = this.hubService.messageUndecryptable.pipe(
+      concatMap(async (receipt) => {
+        if (await this.checkReceiptSignature(receipt)) {
+          await this.outboxService.resendAfterKeyChange(receipt.messageId);
         }
       })
     ).subscribe();
@@ -82,11 +78,6 @@ export class MessagesService {
           await this.syncState.setServerStartedAt(res.serverStartedAt);
         }
 
-        // Unseal any group keys distributed while we were offline before draining messages
-        if (res.groupKeys?.length) {
-          await this.groupsService.handleIncomingGroupKeys(res.groupKeys);
-        }
-
         // Save unread messages from inbox
         for (const encryptedMessage of res.messages || []) {
           await this.processIncomingMessage(encryptedMessage);
@@ -94,10 +85,12 @@ export class MessagesService {
 
         // Process receipts for messages we sent that were delivered/read while we were offline
         for (const receipt of res.receipts || []) {
-          if (await this.checkReceiptSignature(receipt)) {
-            await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
+          if (!(await this.checkReceiptSignature(receipt))) {
+            console.warn('Invalid receipt signature dropped', receipt);
+          } else if (receipt.type === ReceiptType.Undecryptable) {
+            await this.outboxService.resendAfterKeyChange(receipt.messageId);
           } else {
-             console.warn('Invalid receipt signature dropped', receipt);
+            await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
           }
         }
       } catch (err) {
@@ -132,11 +125,12 @@ export class MessagesService {
       return;
     }
 
-    const { senderId, messageId } = encryptedMessage;
+    const { senderId, messageId, payload, signature } = encryptedMessage;
 
     try {
-      // 1. Verify the sender's signature and decrypt (group key recovered from Server if missing)
-      const plaintext = await this.decryptIncoming(encryptedMessage);
+      // 1. Verify the sender's signature and decrypt. A group message is just a 1:1 copy sealed to
+      //    this device, carrying a groupId only for conversation threading.
+      const plaintext = await this.secureMsg.unpackIncomingPayload(senderId, payload, signature);
 
       // 2. Resolve the target conversation (direct or group), creating it if unknown
       const conversationId = await this.resolveIncomingConversation(encryptedMessage);
@@ -151,20 +145,14 @@ export class MessagesService {
       // 5. Confirm delivery to the original sender
       await this.acknowledgeDelivery(messageId, senderId);
     } catch (err) {
-      console.warn('Failed to process incoming message', messageId, err);
+      if (err instanceof UndecryptableError) {
+        // Signature was valid but the payload was sealed to our previous device key. NACK it so
+        // the Server drops its copy and the sender re-keys and resends; discard it locally.
+        await this.acknowledgeUndecryptable(messageId, senderId);
+      } else {
+        console.warn('Failed to process incoming message', messageId, err);
+      }
     }
-  }
-
-  /**
-   * Verify and decrypt an incoming message, dispatching on whether it is a group or 1:1 payload.
-   */
-  private async decryptIncoming(encryptedMessage: EncryptedMessage | any): Promise<string> {
-    const { groupId, epoch, senderId, payload, signature } = encryptedMessage;
-
-    if (groupId) {
-      return this.secureMsg.unpackIncomingGroupPayload(groupId, epoch, senderId, payload, signature);
-    }
-    return this.secureMsg.unpackIncomingPayload(senderId, payload, signature);
   }
 
   /**
@@ -210,6 +198,23 @@ export class MessagesService {
   }
 
   /**
+   * NACK a 1:1 message we received but could not decrypt (sealed to our previous device key). The
+   * Server drops its retained copy and relays the NACK so the original sender re-keys and resends.
+   */
+  private async acknowledgeUndecryptable(messageId: string, senderId: string): Promise<void> {
+    try {
+      const signature = await this.secureMsg.signReceipt(
+        messageId, ReceiptType.Undecryptable, senderId
+      );
+      await lastValueFrom(
+        this.messagesApi.sendReceipt(messageId, senderId, signature, ReceiptType.Undecryptable)
+      );
+    } catch (err) {
+      console.error('Failed to send undecryptable receipt:', err);
+    }
+  }
+
+  /**
    * Stop handling incoming messages and disconnect from the Hub. Called on logout.
    */
   stopListening(): void {
@@ -222,8 +227,8 @@ export class MessagesService {
     this.readSubscription?.unsubscribe();
     this.readSubscription = undefined;
 
-    this.groupKeyRotatedSubscription?.unsubscribe();
-    this.groupKeyRotatedSubscription = undefined;
+    this.undecryptableSubscription?.unsubscribe();
+    this.undecryptableSubscription = undefined;
 
     this.hubService.disconnect();
     this.secureMsg.clearMemory();
