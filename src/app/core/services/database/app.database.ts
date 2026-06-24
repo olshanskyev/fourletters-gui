@@ -9,19 +9,19 @@ export interface MetaRecord {
   value: any;
 }
 
-export type IdentityRecords = 'identityKeyPair' | 'encryptionKeyPair';
-export interface IdentityRecord {
-  id: IdentityRecords;
-  value: CryptoKeyPair;
-}
-
 export interface ContactRecord {
   id: string; // userId
-  signingPublicKey: CryptoKey;
-  encryptionPublicKey: CryptoKey;
-  keyFingerprint?: string; // SHA-256 of (signing ‖ encryption) public keys — the pinned identity
+  identityKey: string; // contact's Curve25519 identity public key (Base64) — the pinned identity
+  registrationId: number; // contact's Signal registration id
+  keyFingerprint?: string; // SHA-256 of the identity key — used to detect rotations
   pinnedAt?: number; // epoch ms when keyFingerprint was last pinned
 }
+
+// --- Signal protocol store records (keys are ArrayBuffers, sessions are serialized strings) ---
+export interface SignalIdentityRecord { id: 'identityKeyPair' | 'registrationId' | 'nextPreKeyId'; value: any; }
+export interface SignalKeyPairRecord { id: string; pubKey: ArrayBuffer; privKey: ArrayBuffer; }
+export interface SignalSessionRecord { id: string; record: string; }
+export interface SignalRemoteIdentityRecord { id: string; identityKey: ArrayBuffer; }
 
 /** Locally cached group metadata: roster and owner. */
 export interface GroupRecord {
@@ -35,10 +35,14 @@ export interface GroupRecord {
 export class UserDatabase extends Dexie {
   messages!: Table<LocalMessage, string>;
   conversations!: Table<LocalConversation, string>;
-  identity!: Table<IdentityRecord, string>;
   contacts!: Table<ContactRecord, string>;
   meta!: Table<MetaRecord, string>;
   groups!: Table<GroupRecord, string>;
+  signalIdentity!: Table<SignalIdentityRecord, string>;
+  signalPreKeys!: Table<SignalKeyPairRecord, string>;
+  signalSignedPreKeys!: Table<SignalKeyPairRecord, string>;
+  signalSessions!: Table<SignalSessionRecord, string>;
+  signalRemoteIdentities!: Table<SignalRemoteIdentityRecord, string>;
 
   constructor(userId: string) {
     super(`fourletters:${userId}`);
@@ -46,10 +50,14 @@ export class UserDatabase extends Dexie {
     this.version(1).stores({
       messages: 'id, conversationId, createdAt, status',
       conversations: 'id, updatedAt',
-      identity: 'id',
       contacts: 'id',
       meta: 'id',
-      groups: 'id, ownerId'
+      groups: 'id, ownerId',
+      signalIdentity: 'id',
+      signalPreKeys: 'id',
+      signalSignedPreKeys: 'id',
+      signalSessions: 'id',
+      signalRemoteIdentities: 'id'
     });
   }
 }
@@ -65,6 +73,14 @@ export class AppDatabase {
     return this._db !== null;
   }
 
+  /** The owner's user id this database belongs to (used to scope the cross-tab Signal lock). */
+  get userId(): string {
+    if (!this._userId) {
+      throw new Error('Database not initialized. Call initialize(userId) first.');
+    }
+    return this._userId;
+  }
+
   get db(): UserDatabase {
     if (!this._db) {
       throw new Error('Database not initialized. Call initialize(userId) first.');
@@ -74,10 +90,14 @@ export class AppDatabase {
 
   get messages() { return this.db.messages; }
   get conversations() { return this.db.conversations; }
-  get identity() { return this.db.identity; }
   get contacts() { return this.db.contacts; }
   get meta() { return this.db.meta; }
   get groups() { return this.db.groups; }
+  get signalIdentity() { return this.db.signalIdentity; }
+  get signalPreKeys() { return this.db.signalPreKeys; }
+  get signalSignedPreKeys() { return this.db.signalSignedPreKeys; }
+  get signalSessions() { return this.db.signalSessions; }
+  get signalRemoteIdentities() { return this.db.signalRemoteIdentities; }
 
   initialize(userId: string) {
     if (this._userId === userId && this._db) {

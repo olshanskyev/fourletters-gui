@@ -11,6 +11,7 @@ export interface LocalMessage {
   createdAt: number;
   status?: MessageStatus;
   serverStartedAt?: number; // For outbox resync when server restarts
-  retryCount?: number;
+  retryCount?: number; // For outbox resync when server restarts
   nackResent?: boolean; // True once re-keyed and resent after an 'undecryptable' NACK (resend once)
+  ciphers?: Record<string, string>; // recipientId → exact Signal wire payload, for idempotent resend
 }

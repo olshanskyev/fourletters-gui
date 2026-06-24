@@ -7,16 +7,26 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { OneTimePreKeyDto } from './oneTimePreKeyDto';
+import { SignedPreKeyDto } from './signedPreKeyDto';
 
 
+/**
+ * Uploads the caller\'s Signal pre-key bundle (identity, registration id, signed pre-key, and a pool of one-time pre-keys), replacing any previous bundle. Sent on first login of a new device.
+ */
 export interface KeysUploadRequest { 
     /**
-     * The caller\'s ECDSA P-256 public signing key (Base64 SPKI).
+     * The caller\'s Signal registration id.
      */
-    signingPublicKey: string;
+    registrationId: number;
     /**
-     * The caller\'s ECDH P-256 public encryption key (Base64 SPKI).
+     * The caller\'s long-lived Curve25519 identity public key (Base64).
      */
-    encryptionPublicKey: string;
+    identityKey: string;
+    signedPreKey: SignedPreKeyDto;
+    /**
+     * Initial pool of one-time pre-keys; the server hands one out per session and deletes it.
+     */
+    oneTimePreKeys: Array<OneTimePreKeyDto>;
 }
 

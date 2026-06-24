@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { CryptoService } from '@core/services/crypto';
+import { SignalSessionService, PREKEY_LOW_WATERMARK, PREKEY_REPLENISH_BATCH } from '@core/services/crypto/signal';
 import { KeysApiService } from './keys-api.service';
 import { AppDatabase } from '@core/services/database/app.database';
 import { IdentityRepository } from './identity.repository';
-import { KeysUploadRequest } from '@dto/models';
 import { lastValueFrom } from 'rxjs';
 
 @Injectable({
@@ -11,92 +11,59 @@ import { lastValueFrom } from 'rxjs';
 })
 export class IdentityService {
   private readonly cryptoService = inject(CryptoService);
+  private readonly signal = inject(SignalSessionService);
   private readonly keysApi = inject(KeysApiService);
   private readonly appDb = inject(AppDatabase);
   private readonly identityRepo = inject(IdentityRepository);
 
   /**
-   * Called during startup after authentication.
-   * Checks if identity keys exist in the local Dexie store.
-   * If they do not exist, generates them and uploads public key segments.
+   * Called during startup after authentication. Ensures the at-rest master key and the local Signal
+   * identity exist; on a fresh device it generates the bundle and uploads it to the directory.
    */
   async ensureIdentityKeys(): Promise<void> {
     if (!this.appDb.isInitialized) {
       throw new Error('AppDatabase must be initialized before ensuring identity keys.');
     }
 
-    const hasIdentityKey = await this.identityRepo.getIdentityKey('identityKeyPair');
-    const hasEncryptionKey = await this.identityRepo.getIdentityKey('encryptionKeyPair');
-
-    let identityKeyPair = hasIdentityKey?.value;
-    let encryptionKeyPair = hasEncryptionKey?.value;
     let dbMasterKey = await this.identityRepo.getDbMasterKey();
-
-    let keysNeedUpload = false;
-
-    // Generate Missing Keys Locally
     if (!dbMasterKey) {
       dbMasterKey = await this.cryptoService.generateDbMasterKey();
       await this.identityRepo.setDbMasterKey(dbMasterKey);
     }
 
-    if (!identityKeyPair) {
-      identityKeyPair = await this.cryptoService.generateIdentityKeyPair();
-      await this.identityRepo.putIdentityKey({ id: 'identityKeyPair', value: identityKeyPair });
-      keysNeedUpload = true;
-    }
-
-    if (!encryptionKeyPair) {
-      encryptionKeyPair = await this.cryptoService.generateEncryptionKeyPair();
-      await this.identityRepo.putIdentityKey({ id: 'encryptionKeyPair', value: encryptionKeyPair });
-      keysNeedUpload = true;
-    }
-
-    // Upload public key segments to Directory if fresh device
-    if (keysNeedUpload) {
-      const signingPublicKey = await this.cryptoService
-        .exportPublicKeyBase64(identityKeyPair.publicKey);
-      const encryptionPublicKey = await this.cryptoService
-        .exportPublicKeyBase64(encryptionKeyPair.publicKey);
-
-      const request: KeysUploadRequest = {
-        signingPublicKey,
-        encryptionPublicKey
-      };
-
+    if (!(await this.signal.hasLocalIdentity())) {
+      const bundle = await this.signal.createIdentityBundle();
       try {
-        await lastValueFrom(this.keysApi.uploadKeys(request));
+        await lastValueFrom(this.keysApi.uploadKeys(bundle));
       } catch (err) {
-        console.error('Failed to upload identity keys:', err);
-        // ToDo: retry or notificatation try later
+        console.error('Failed to upload Signal pre-key bundle:', err);
+        // Roll back so the next login regenerates and retries (avoids a half-registered device).
+        await this.signal.wipe();
         throw err;
       }
     }
   }
 
   /**
-   * called during session revocation to wipe local identity keys, forcing regeneration on next login.
+   * Top up the directory's one-time pre-key pool when it runs low, so peers can always open a
+   * session with us. Safe to call on every startup.
    */
+  async replenishPreKeysIfLow(): Promise<void> {
+    try {
+      const { count } = await lastValueFrom(this.keysApi.countPreKeys());
+      if (count >= PREKEY_LOW_WATERMARK) {
+        return;
+      }
+      const oneTimePreKeys = await this.signal.generateMorePreKeys(PREKEY_REPLENISH_BATCH);
+      await lastValueFrom(this.keysApi.replenishPreKeys({ oneTimePreKeys }));
+    } catch (err) {
+      console.error('Failed to replenish one-time pre-keys:', err);
+    }
+  }
+
+  /** Wipe local Signal state on revocation, forcing a fresh identity (and key-change warning) next login. */
   async revokeIdentity(): Promise<void> {
-    await this.identityRepo.deleteIdentityKey('identityKeyPair');
-    await this.identityRepo.deleteIdentityKey('encryptionKeyPair');
-  }
-
-  // --- Local key-material accessors (single source for private/symmetric keys) ---
-
-  /** Our ECDSA signing private key, for signing outgoing payloads and receipts. */
-  async getSigningPrivateKey(): Promise<CryptoKey> {
-    return (await this.requireIdentity('identityKeyPair')).privateKey;
-  }
-
-  /** Our ECDH encryption private key, for decrypting inbound 1:1 payloads and unwrapping group keys. */
-  async getEncryptionPrivateKey(): Promise<CryptoKey> {
-    return (await this.requireIdentity('encryptionKeyPair')).privateKey;
-  }
-
-  /** Our ECDH encryption public key, for sealing a group key to ourselves. */
-  async getEncryptionPublicKey(): Promise<CryptoKey> {
-    return (await this.requireIdentity('encryptionKeyPair')).publicKey;
+    await this.signal.wipe();
   }
 
   /** The local AES-GCM master key used for at-rest encryption. */
@@ -104,11 +71,5 @@ export class IdentityService {
     const key = await this.identityRepo.getDbMasterKey();
     if (!key) throw new Error('Missing AES-GCM Master Key.');
     return key;
-  }
-
-  private async requireIdentity(id: 'identityKeyPair' | 'encryptionKeyPair'): Promise<CryptoKeyPair> {
-    const record = await this.identityRepo.getIdentityKey(id);
-    if (!record) throw new Error('Local identity keys missing.');
-    return record.value;
   }
 }

@@ -125,12 +125,12 @@ export class MessagesService {
       return;
     }
 
-    const { senderId, messageId, payload, signature } = encryptedMessage;
+    const { senderId, messageId, payload } = encryptedMessage;
 
     try {
-      // 1. Verify the sender's signature and decrypt. A group message is just a 1:1 copy sealed to
-      //    this device, carrying a groupId only for conversation threading.
-      const plaintext = await this.secureMsg.unpackIncomingPayload(senderId, payload, signature);
+      // 1. Decrypt through the sender's ratchet session (the ratchet authenticates the message). A
+      //    group message is just a 1:1 copy sealed to this device, carrying a groupId for threading.
+      const plaintext = await this.secureMsg.unpackIncomingPayload(senderId, payload);
 
       // 2. Resolve the target conversation (direct or group), creating it if unknown
       const conversationId = await this.resolveIncomingConversation(encryptedMessage);

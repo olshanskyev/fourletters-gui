@@ -47,8 +47,10 @@ export class StartupService {
                   this.setPermissions(user);
                   if (user) {
                     try {
+                      await this.requestPersistentStorage();
                       await this.identityService.ensureIdentityKeys();
                       this.messagesService.startListening();
+                      await this.identityService.replenishPreKeysIfLow();
                     } catch (e) {
                       console.error('Failed to initialize local crypto identity keys. Pausing message stream', e);
                     }
@@ -77,5 +79,19 @@ export class StartupService {
       }
     });
 
+  }
+
+  /**
+   * Ask the browser to make IndexedDB storage persistent so the Signal ratchet state (identity,
+   * sessions, pre-keys) is not silently evicted under storage pressure.
+   */
+  private async requestPersistentStorage(): Promise<void> {
+    try {
+      if (navigator.storage?.persist && !(await navigator.storage.persisted())) {
+        await navigator.storage.persist();
+      }
+    } catch (e) {
+      console.warn('Persistent storage request failed', e);
+    }
   }
 }

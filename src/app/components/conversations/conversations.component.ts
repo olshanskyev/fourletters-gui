@@ -33,6 +33,8 @@ export class ConversationsComponent {
   conversations = toSignal(this.conversationsService.observeConversations(), { initialValue: [] });
 
   constructor() {
-    //this.conversationsService.createConversation('NAME', 'direct', ['3bc7f503-e4d7-4edc-998f-cfa5e38cf986']);
+    //ToDo why called twice on startup? (once for each route)
+    //console.log('ConversationsComponent constructor');
+    //this.conversationsService.createConversation('NAME', 'direct', ['8698437b-3b73-4a7b-80fb-a9d6f0528617']);
   }
 }

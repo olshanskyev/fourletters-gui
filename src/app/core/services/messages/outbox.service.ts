@@ -9,17 +9,7 @@ import { GroupsService } from '@core/services/groups/groups.service';
 import { AuthService } from '@core/services/authentication/auth.service';
 import { lastValueFrom } from 'rxjs';
 import { LocalConversation } from '@core/services/conversations/models/conversations.model';
-import { AcceptedResponse } from '@dto/models';
-
-/**
- * A built outgoing message ready to transmit: the optional 1:1 recipient or group, and a bound
- * send call. A group send fans the message out as one independent 1:1 copy per member.
- */
-interface PreparedSend {
-  recipientId?: string;
-  groupId?: string;
-  send: () => Promise<AcceptedResponse | undefined>;
-}
+import { AcceptedResponse, EncryptedMessage } from '@dto/models';
 
 @Injectable({
   providedIn: 'root'
@@ -32,6 +22,53 @@ export class OutboxService {
   private secureMsg = inject(SecureMessageService);
   private groups = inject(GroupsService);
   private auth = inject(AuthService);
+
+  async sendMessage(
+    conversationId: string,
+    text: string ): Promise<void> {
+
+    const convo = await this.conversationsService.getConversation(conversationId);
+    if (!convo) {
+      console.error('Conversation not found. Message sending failed.', conversationId);
+      return;
+    }
+
+    const routing = await this.resolveRouting(convo);
+    if (!routing) {
+      return; // routing resolution failed and was already logged
+    }
+
+    const id = crypto.randomUUID();
+    const time = Date.now();
+
+    // Build the outbox record (at-rest plaintext). Ciphertext is produced lazily during dispatch.
+    const message: LocalMessage = {
+      id,
+      conversationId: convo.id,
+      senderId: 'me', // Placeholder, real senderId the server calculates based on auth
+      recipientId: routing.recipientId,
+      groupId: routing.groupId,
+      text: await this.secureMsg.encryptForAtRest(id, text),
+      isMine: true,
+      createdAt: time,
+      status: 'pending',
+      retryCount: 0,
+      ciphers: {}
+    };
+
+    // Persist before transmitting so a send/encrypt failure can be marked for manual resend.
+    await this.persistOutgoing(message, text, time);
+
+    try {
+      const res = await this.dispatch(message);
+      if (res) {
+        await this.confirmAccepted(id, res);
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      await this.markFailed(message);
+    }
+  }
 
   async processReceipt(messageId: string, status: 'delivered' | 'read') {
     try {
@@ -50,7 +87,8 @@ export class OutboxService {
   }
 
   /**
-   * Resend a 1:1 message with already fetched new contact key.
+   * Re-key and resend a 1:1 message after the recipient NACK'd it (they changed device). Opens a
+   * fresh session from their new bundle and re-encrypts — the one place re-encryption is correct.
    */
   async resendAfterKeyChange(messageId: string): Promise<void> {
     const msg = await this.repository.getMessageById(messageId);
@@ -68,16 +106,15 @@ export class OutboxService {
     }
 
     try {
-      // The recipient's current directory key was already re-pinned while verifying the receipt.
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-      const { payload, signature } = await this.secureMsg.buildOutgoingPayload(msg.recipientId, plaintext);
-
+      const { payload } = await this.secureMsg.buildOutgoingPayload(msg.recipientId, plaintext, true);
+      msg.ciphers = { ...(msg.ciphers ?? {}), [msg.recipientId]: payload };
       msg.nackResent = true;
       msg.status = 'pending';
       await this.repository.updateMessage(msg);
 
       const res = await lastValueFrom(
-        this.messagesApi.sendMessage(msg.recipientId, payload, signature, msg.id)
+        this.messagesApi.sendMessage(msg.recipientId, payload, msg.id)
       );
       await this.confirmAccepted(msg.id, res);
     } catch (err) {
@@ -87,7 +124,8 @@ export class OutboxService {
   }
 
   /**
-   * Manually re-send a message the user previously saw fail.
+   * Manually re-send a message the user previously saw fail. Re-transmits stored ciphertext; only
+   * group members that never got a copy are freshly encrypted.
    */
   async resend(messageId: string): Promise<void> {
     const msg = await this.repository.getMessageById(messageId);
@@ -99,16 +137,7 @@ export class OutboxService {
     await this.repository.updateMessage(msg);
 
     try {
-      const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-      let res: AcceptedResponse | undefined;
-      if (msg.groupId) {
-        res = await this.fanOutGroup(msg.id, msg.groupId, plaintext);
-      } else if (msg.recipientId) {
-        const { payload, signature } = await this.secureMsg.buildOutgoingPayload(msg.recipientId, plaintext);
-        res = await lastValueFrom(
-          this.messagesApi.sendMessage(msg.recipientId, payload, signature, msg.id)
-        );
-      }
+      const res = await this.dispatch(msg);
       if (res) {
         await this.confirmAccepted(msg.id, res);
       }
@@ -142,9 +171,7 @@ export class OutboxService {
   }
 
   /**
-   * Partition the unconfirmed outbox into the messages that need re-sending:
-   * group messages to re-fan, and direct messages that were never accepted (their initial send
-   * failed) or were accepted before a Server restart (re-pushed once, guarded by retryCount).
+   * Partition the unconfirmed outbox into the messages that need re-sending
    */
   private async collectResends(
     pendingMessages: LocalMessage[],
@@ -154,13 +181,15 @@ export class OutboxService {
     const group: LocalMessage[] = [];
 
     for (const msg of pendingMessages) {
-      if (msg.groupId) {
-        group.push(msg);
-      } else if (!msg.recipientId) {
+      const isGroup = !!msg.groupId;
+      if (!isGroup && !msg.recipientId) {
         continue; // direct messages always carry a recipient
-      } else if (msg.status === 'pending') {
+      }
+      const bucket = isGroup ? group : direct;
+
+      if (msg.status === 'pending') {
         // Never accepted by the Server (the initial send failed): re-attempt once.
-        direct.push(msg);
+        bucket.push(msg);
       } else if (
         msg.status === 'accepted' &&
         msg.serverStartedAt !== currentServerStartedAt &&
@@ -169,7 +198,7 @@ export class OutboxService {
         // Accepted, then the Server restarted before delivering it: re-push once.
         msg.retryCount = 1;
         await this.repository.updateMessage(msg);
-        direct.push(msg);
+        bucket.push(msg);
       }
     }
 
@@ -177,21 +206,21 @@ export class OutboxService {
   }
 
   /**
-   * Re-submit a batch of direct messages. Accepted copies move to 'accepted'; any never-accepted
-   * message is marked 'failed'.
+   * Re-submit a batch of direct messages, re-transmitting each one's stored ciphertext. Accepted
+   * copies move to 'accepted'; any never-accepted message is marked 'failed'.
    */
   private async resendDirectBatch(chunk: LocalMessage[]): Promise<void> {
-    const payload = await Promise.all(
-      chunk.map(async msg => {
-        const recipientId = msg.recipientId!;
-        const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-        const { payload, signature } = await this.secureMsg.buildOutgoingPayload(recipientId, plaintext);
-        return { messageId: msg.id, recipientId, payload, signature };
-      })
-    );
+    const messages: EncryptedMessage[] = [];
+    for (const msg of chunk) {
+      const recipientId = msg.recipientId!;
+      const payload = await this.cipherFor(msg, recipientId);
+      messages.push({ messageId: msg.id, recipientId, payload });
+    }
+    // Persist any ciphertext freshly created above (e.g. a never-encrypted pending message).
+    await Promise.all(chunk.map(msg => this.repository.updateMessage(msg).catch(() => undefined)));
 
     try {
-      const res = await lastValueFrom(this.messagesApi.sendMessagesBatch(payload));
+      const res = await lastValueFrom(this.messagesApi.sendMessagesBatch(messages));
       if (res.serverStartedAt) {
         await this.syncState.setServerStartedAt(res.serverStartedAt);
       }
@@ -219,148 +248,102 @@ export class OutboxService {
   }
 
   /**
-   * Re-attempt a pending group message by re-fanning it to the current roster. Every copy keeps the
-   * original messageId, so members that already received it dedupe the duplicate. If any copy still
-   * fails, the message is marked 'failed' so the user can resend it manually.
+   * Re-fan a group message (already selected by collectResends) to the current roster.
    */
   private async resyncGroupMessage(msg: LocalMessage): Promise<void> {
-    if (!msg.groupId || msg.status !== 'pending') {
+    if (!msg.groupId) {
       return;
     }
+    const wasPending = msg.status === 'pending';
 
     try {
-      const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-      const res = await this.fanOutGroup(msg.id, msg.groupId, plaintext);
+      const res = await this.fanOutGroup(msg);
       if (res) {
         await this.confirmAccepted(msg.id, res);
       }
     } catch (err) {
       console.error('Failed to resync group message:', msg.id, err);
-      await this.markFailed(msg);
-    }
-  }
-
-  getReceipient(conversation: LocalConversation): string | undefined {
-    return (conversation?.type === 'direct')?
-       conversation.participants?.[0] :
-       conversation?.groupId;
-  }
-
-  async sendMessage(
-    conversationId: string,
-    text: string ): Promise<void> {
-
-    const convo = await this.conversationsService.getConversation(conversationId);
-    if (!convo) {
-      console.error('Conversation not found. Message sending failed.', conversationId);
-      return;
-    }
-
-    const id = crypto.randomUUID();
-    const time = Date.now();
-
-    // 1. Build the transmission payload (direct vs group differ only here)
-    const prepared = (convo.type === 'group')
-      ? await this.prepareGroupSend(convo, text, id)
-      : await this.prepareDirectSend(convo, text, id);
-    if (!prepared) {
-      return; // target resolution failed and was already logged
-    }
-
-    // 2. Encrypt for local At-Rest Storage and persist to the outbox
-    const message: LocalMessage = {
-      id,
-      conversationId: convo.id,
-      senderId: 'me', // Placeholder, real senderId the server calculates based on auth
-      recipientId: prepared.recipientId,
-      groupId: prepared.groupId,
-      text: await this.secureMsg.encryptForAtRest(id, text),
-      isMine: true,
-      createdAt: time,
-      status: 'pending',
-      retryCount: 0
-    };
-    await this.persistOutgoing(message, text, time);
-
-    // 3. Send and reconcile acceptance
-    try {
-      const res = await prepared.send();
-      if (res) {
-        await this.confirmAccepted(id, res);
+      if (wasPending) {
+        await this.markFailed(msg);
       }
-    } catch (err) {
-      console.error('Failed to send message:', err);
-      await this.markFailed(message);
     }
   }
 
-  /**
-   * Resolve a 1:1 send: E2E-encrypt and sign for the single recipient and bind the API call.
-   */
-  private async prepareDirectSend(
-    convo: LocalConversation,
-    text: string,
-    id: string
-  ): Promise<PreparedSend | undefined> {
-    const recipientId = this.getReceipient(convo);
+
+
+  /** Resolve a conversation's routing: the direct peer, or the group it fans out to. */
+  private async resolveRouting(
+    convo: LocalConversation
+  ): Promise<{ recipientId?: string; groupId?: string } | undefined> {
+    if (convo.type === 'group') {
+      if (!convo.groupId) {
+        console.error('Group conversation missing groupId. Message sending failed.', convo.id);
+        return undefined;
+      }
+      return { groupId: convo.groupId };
+    }
+    const recipientId = convo.participants?.[0];
     if (!recipientId) {
       console.error('No recipient found for conversation. Message sending failed.', convo.id);
       return undefined;
     }
-
-    const { payload, signature } = await this.secureMsg.buildOutgoingPayload(recipientId, text);
-    return {
-      recipientId,
-      send: () => lastValueFrom(this.messagesApi.sendMessage(recipientId, payload, signature, id))
-    };
+    return { recipientId };
   }
 
-  /**
-   * Resolve a group send: fan the message out as one independent 1:1 copy per member, each sealed
-   * to that member's current directory key. Every copy shares the same messageId and carries the
-   * groupId for conversation threading. The caller (self) is excluded from the fan-out.
-   */
-  private async prepareGroupSend(
-    convo: LocalConversation,
-    text: string,
-    id: string
-  ): Promise<PreparedSend | undefined> {
-    const groupId = convo.groupId;
-    if (!groupId) {
-      console.error('Group conversation missing groupId. Message sending failed.', convo.id);
-      return undefined;
+  /** Transmit a message's ciphertext to its destination: a group fan-out or a single 1:1 send. */
+  private dispatch(msg: LocalMessage): Promise<AcceptedResponse | undefined> {
+    if (msg.groupId) {
+      return this.fanOutGroup(msg);
     }
+    if (msg.recipientId) {
+      return this.sendDirect(msg, msg.recipientId);
+    }
+    return Promise.resolve(undefined);
+  }
 
-    return {
-      groupId,
-      send: () => this.fanOutGroup(id, groupId, text)
-    };
+  /** Transmit the stored 1:1 ciphertext to a single recipient. */
+  private async sendDirect(msg: LocalMessage, recipientId: string): Promise<AcceptedResponse | undefined> {
+    const payload = await this.cipherFor(msg, recipientId);
+    await this.repository.updateMessage(msg).catch(() => undefined); // persist a freshly created cipher
+    return lastValueFrom(this.messagesApi.sendMessage(recipientId, payload, msg.id));
   }
 
   /**
    * Send one independent 1:1 copy per current group member (excluding self), all sharing the
-   * message's id. The roster is resolved fresh from the Server here. Resolves with the last
-   * accepted response when every copy succeeds; rejects if any copy fails, leaving the message
-   * pending so resync re-fans the whole message later (receivers dedupe by messageId).
+   * message's id and carrying the groupId for threading. Reuses each member's stored ciphertext and
+   * only encrypts for members that lack one (e.g. joined since the message was first sent).
    */
-  private async fanOutGroup(
-    messageId: string,
-    groupId: string,
-    text: string
-  ): Promise<AcceptedResponse | undefined> {
+  private async fanOutGroup(msg: LocalMessage): Promise<AcceptedResponse | undefined> {
+    const groupId = msg.groupId!;
     const myId = this.auth.currentUser()?.id;
     const members = (await this.groups.getMembers(groupId)).filter(memberId => memberId !== myId);
 
     const results = await Promise.all(
       members.map(async memberId => {
-        const { payload, signature } = await this.secureMsg.buildOutgoingPayload(memberId, text);
+        const payload = await this.cipherFor(msg, memberId);
         return lastValueFrom(
-          this.messagesApi.sendMessage(memberId, payload, signature, messageId, groupId)
+          this.messagesApi.sendMessage(memberId, payload, msg.id, groupId)
         );
       })
     );
+    await this.repository.updateMessage(msg).catch(() => undefined); // persist any new ciphers
 
     return results.at(-1);
+  }
+
+  /**
+   * The exact ciphertext to (re)send to a recipient. Returns the stored bytes when present;
+   * otherwise encrypts the at-rest plaintext once and records it (mutates msg.ciphers).
+   */
+  private async cipherFor(msg: LocalMessage, recipientId: string): Promise<string> {
+    const existing = msg.ciphers?.[recipientId];
+    if (existing) {
+      return existing;
+    }
+    const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
+    const { payload } = await this.secureMsg.buildOutgoingPayload(recipientId, plaintext);
+    msg.ciphers = { ...(msg.ciphers ?? {}), [recipientId]: payload };
+    return payload;
   }
 
   /**

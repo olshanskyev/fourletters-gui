@@ -23,13 +23,9 @@ export interface EncryptedMessage {
      */
     senderId?: string;
     /**
-     * E2E encrypted message payload (Base64). Per-message ephemeral-ECDH ciphertext sealed to the recipient\'s encryption key.
+     * E2E encrypted Signal ciphertext. Format \'<sessionType>.<bodyBase64>\' where sessionType is 1 (WhisperMessage, established session) or 3 (PreKeyWhisperMessage, establishes the session). The Server treats it as opaque.
      */
     payload: string;
-    /**
-     * Detached signature over the payload produced by the sender\'s identity key (Base64). Verified end-to-end by the recipient against the public-key directory.
-     */
-    signature: string;
     /**
      * Present only for group messages. Identifies the group so the recipient threads the message into the group conversation. The sender encrypts and sends one independent 1:1 copy per member; the Server treats each copy as an ordinary 1:1 message. Omitted for 1:1 messages.
      */

@@ -7,19 +7,26 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { OneTimePreKeyDto } from './oneTimePreKeyDto';
+import { SignedPreKeyDto } from './signedPreKeyDto';
 
 
+/**
+ * A user\'s Signal pre-key bundle as served by the directory: identity, registration id, signed pre-key, and at most one one-time pre-key (absent when the pool is exhausted).
+ */
 export interface PublicKeySet { 
     /**
-     * ECDSA P-256 public signing key (Base64 SPKI).
+     * The user\'s Signal registration id.
      */
-    signingPublicKey: string;
+    registrationId: number;
     /**
-     * ECDH P-256 public encryption key (Base64 SPKI).
+     * Long-lived Curve25519 identity public key (Base64).
      */
-    encryptionPublicKey: string;
+    identityKey: string;
+    signedPreKey: SignedPreKeyDto;
+    oneTimePreKey?: OneTimePreKeyDto;
     /**
-     * Epoch milliseconds when these public keys were uploaded to the directory.
+     * Epoch milliseconds when this bundle was uploaded to the directory.
      */
     uploadedAt: number;
 }

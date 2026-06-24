@@ -24,7 +24,6 @@ export class MessagesApiService {
   sendMessage(
     recipientId: string,
     payload: string,
-    signature: string,
     messageId: string = crypto.randomUUID(),
     groupId?: string
   ): Observable<AcceptedResponse> {
@@ -32,7 +31,6 @@ export class MessagesApiService {
       messageId,
       recipientId,
       payload,
-      signature,
       ...(groupId ? { groupId } : {})
     };
     return this.httpClient.post<AcceptedResponse>('/messages', message);
