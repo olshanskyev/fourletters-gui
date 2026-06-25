@@ -16,10 +16,10 @@ export interface UpdateMembersRequest {
     /**
      * User ids to add to the roster.
      */
-    add?: Array<string>;
+    add?: string[];
     /**
      * User ids to remove from the roster.
      */
-    remove?: Array<string>;
+    remove?: string[];
 }
 

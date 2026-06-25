@@ -14,7 +14,7 @@ export interface MessageBatchResponse {
     /**
      * Per-message acceptance result, in request order.
      */
-    results: Array<AcceptedResponse>;
+    results: AcceptedResponse[];
     /**
      * Epoch milliseconds at which this Server process started (carried once for the whole batch).
      */

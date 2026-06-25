@@ -124,7 +124,7 @@ export class SecureMessageService {
       return false;
     }
 
-    if (originalMessage.groupId) {
+    if (originalMessage.kind === 'group') {
       // Group message: any current member may legitimately acknowledge — authorize by roster membership.
       const isMember = await this.groups.isMember(originalMessage.groupId, receiptSenderId);
       if (!isMember) {
@@ -153,7 +153,8 @@ export class SecureMessageService {
    * Verify a receipt signature against the sender's pinned identity key. On failure, re-fetch the
    * directory key once; an unchanged or still-failing key is a genuine bad signature.
    */
-  private async verifyWithPin(senderId: string, payload: string, signature: string): Promise<boolean> {
+  private async verifyWithPin(senderId: string, payload: string, signature: string)
+    : Promise<boolean> {
     const contact = await this.contacts.getContactRecord(senderId);
     if (await this.signal.verifyReceipt(contact.identityKey, payload, signature)) {
       return true;

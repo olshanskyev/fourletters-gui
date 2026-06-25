@@ -64,7 +64,7 @@ export class MessagesService {
     this.undecryptableSubscription = this.hubService.messageUndecryptable.pipe(
       concatMap(async (receipt) => {
         if (await this.checkReceiptSignature(receipt)) {
-          await this.outboxService.resendAfterKeyChange(receipt.messageId);
+          await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
         }
       })
     ).subscribe();
@@ -88,7 +88,7 @@ export class MessagesService {
           if (!(await this.checkReceiptSignature(receipt))) {
             console.warn('Invalid receipt signature dropped', receipt);
           } else if (receipt.type === ReceiptType.Undecryptable) {
-            await this.outboxService.resendAfterKeyChange(receipt.messageId);
+            await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
           } else {
             await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
           }
@@ -158,7 +158,8 @@ export class MessagesService {
   /**
    * Find (or lazily create) the local conversation an incoming message belongs to. Group messages
    */
-  private async resolveIncomingConversation(encryptedMessage: EncryptedMessage | any): Promise<string> {
+  private async resolveIncomingConversation(encryptedMessage: EncryptedMessage | any)
+    : Promise<string> {
     const { groupId, senderId } = encryptedMessage;
 
     if (groupId) {
@@ -294,16 +295,17 @@ export class MessagesService {
     conversationId: string,
     atRestText: string
   ): Promise<LocalMessage> {
-    const message: LocalMessage = {
+    const base = {
       id: encryptedMessage.messageId, // Real external message id
       conversationId,
       senderId: encryptedMessage.senderId,
-      recipientId: encryptedMessage.recipientId,
-      groupId: encryptedMessage.groupId,
       text: atRestText,
       isMine: false,
       createdAt: Date.now()
     };
+    const message: LocalMessage = encryptedMessage.groupId
+      ? { ...base, kind: 'group', groupId: encryptedMessage.groupId }
+      : { ...base, kind: 'direct', recipientId: encryptedMessage.recipientId };
 
     await this.repository.addMessage(message);
     return message;

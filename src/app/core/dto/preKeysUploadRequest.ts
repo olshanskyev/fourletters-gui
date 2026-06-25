@@ -17,6 +17,6 @@ export interface PreKeysUploadRequest {
     /**
      * Additional one-time pre-keys to append to the caller\'s pool.
      */
-    oneTimePreKeys: Array<OneTimePreKeyDto>;
+    oneTimePreKeys: OneTimePreKeyDto[];
 }
 

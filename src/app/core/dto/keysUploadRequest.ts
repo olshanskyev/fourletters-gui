@@ -27,6 +27,6 @@ export interface KeysUploadRequest {
     /**
      * Initial pool of one-time pre-keys; the server hands one out per session and deletes it.
      */
-    oneTimePreKeys: Array<OneTimePreKeyDto>;
+    oneTimePreKeys: OneTimePreKeyDto[];
 }
 

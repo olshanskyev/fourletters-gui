@@ -15,11 +15,11 @@ export interface InboxResponse {
     /**
      * The recipient\'s undelivered messages, in arrival order.
      */
-    messages: Array<EncryptedMessage>;
+    messages: EncryptedMessage[];
     /**
      * Pending delivery/read acknowledgements for messages this user sent, accumulated while the user was offline. Returned once and then cleared.
      */
-    receipts?: Array<MessageReceipt>;
+    receipts?: MessageReceipt[];
     /**
      * Epoch milliseconds at which this Server process started. A changed value across responses signals a restart, after which the client re-submits its unconfirmed outbox messages.
      */

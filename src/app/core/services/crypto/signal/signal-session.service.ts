@@ -32,8 +32,8 @@ export class SignalSessionService {
   private readonly decoder = new TextDecoder();
   private curvePromise?: Promise<Curve>;
 
-  /** Re-exposed so ContactsService can re-pin and warn when a contact's identity key changes (carries the new key). */
-  readonly identityChanged$: Observable<{ userId: string; identityKey: string }> = this.store.identityChanged$;
+  /** Re-exposed so ContactsService can pin (and warn on a real change) when a contact's identity is learned/changed (carries the key). */
+  readonly identitySeen$ = this.store.identitySeen$;
 
   /** True once this device has generated its own Signal identity. */
   hasLocalIdentity(): Promise<boolean> {
@@ -51,7 +51,9 @@ export class SignalSessionService {
       await this.store.putIdentityKeyPair(identityKeyPair);
       await this.store.putRegistrationId(registrationId);
 
-      const signedPreKey = await KeyHelper.generateSignedPreKey(identityKeyPair, SIGNED_PREKEY_ID);
+      const signedPreKey = await KeyHelper.generateSignedPreKey(
+        identityKeyPair, SIGNED_PREKEY_ID
+      );
       await this.store.storeSignedPreKey(SIGNED_PREKEY_ID, signedPreKey.keyPair);
 
       const oneTimePreKeys = await this.generateAndStorePreKeys(INITIAL_PREKEY_COUNT);
@@ -92,7 +94,10 @@ export class SignalSessionService {
           signature: Base64.base64ToBuffer(bundle.signedPreKey.signature)
         },
         preKey: bundle.oneTimePreKey
-          ? { keyId: bundle.oneTimePreKey.keyId, publicKey: Base64.base64ToBuffer(bundle.oneTimePreKey.publicKey) }
+          ? {
+              keyId: bundle.oneTimePreKey.keyId,
+              publicKey: Base64.base64ToBuffer(bundle.oneTimePreKey.publicKey)
+            }
           : undefined
       });
     });
@@ -126,12 +131,15 @@ export class SignalSessionService {
     const keyPair = await this.store.getIdentityKeyPair();
     if (!keyPair) throw new Error('Cannot sign receipt: local Signal identity is missing.');
     const curve = await this.getCurve();
-    const sig = curve.calculateSignature(keyPair.privKey, this.encoder.encode(message).buffer as ArrayBuffer);
+    const sig = curve.calculateSignature(
+      keyPair.privKey, this.encoder.encode(message).buffer as ArrayBuffer
+    );
     return Base64.bufferToBase64(sig);
   }
 
   /** Verify a receipt signature against a contact's Base64 Curve25519 identity key. */
-  async verifyReceipt(identityKeyB64: string, message: string, signatureB64: string): Promise<boolean> {
+  async verifyReceipt(identityKeyB64: string, message: string, signatureB64: string)
+    : Promise<boolean> {
     try {
       const curve = await this.getCurve();
       // NOTE: the sync Curve.verifySignature follows the NaCl convention and returns TRUE when the

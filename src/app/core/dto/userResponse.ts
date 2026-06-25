@@ -16,6 +16,6 @@ export interface UserResponse {
     /**
      * List of user permissions/roles for RBAC.
      */
-    roles: Array<string>;
+    roles: string[];
 }
 

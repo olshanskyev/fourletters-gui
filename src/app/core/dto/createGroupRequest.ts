@@ -20,6 +20,6 @@ export interface CreateGroupRequest {
     /**
      * Initial member user ids (the owner is added automatically if omitted).
      */
-    members: Array<string>;
+    members: string[];
 }
 

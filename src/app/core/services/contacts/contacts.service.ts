@@ -25,10 +25,8 @@ export class ContactsService {
   readonly keyChanged$: Observable<{ userId: string }> = this.keyChangedSubject.asObservable();
 
   constructor() {
-    // The ratchet reports a changed remote identity (with its new key) during decrypt/session setup
-    // → re-pin straight from that key; no directory fetch, no one-time pre-key consumed.
-    this.signal.identityChanged$.subscribe(({ userId, identityKey }) => {
-      this.pinIdentityKey(userId, identityKey).catch(err => console.error('Failed to reconcile changed key', userId, err));
+    this.signal.identitySeen$.subscribe(({ userId, identityKey }) => {
+      this.pinIdentityKey(userId, identityKey).catch(err => console.error('Failed to pin identity key', userId, err));
     });
   }
 
@@ -54,7 +52,8 @@ export class ContactsService {
   }
 
   /** Fetch the directory bundle and (re)pin the contact's identity from it, returning record + bundle. */
-  private async fetchAndPin(userId: string): Promise<{ record: ContactRecord; bundle: PublicKeySet }> {
+  private async fetchAndPin(userId: string)
+    : Promise<{ record: ContactRecord; bundle: PublicKeySet }> {
     const bundle = (await lastValueFrom(this.keysApi.getUserKeys(userId))).keys;
     const record = await this.pinIdentityKey(userId, bundle.identityKey, bundle.registrationId);
     return { record, bundle };
@@ -64,16 +63,17 @@ export class ContactsService {
    * Pin a contact's Curve25519 identity (key + fingerprint). Announces a real change via keyChanged$
    * only when it differs from a previously pinned one. Pure local write — works from a key in hand.
    */
-  private async pinIdentityKey(userId: string, identityKey: string, registrationId?: number): Promise<ContactRecord> {
+  private async pinIdentityKey(userId: string, identityKey: string, registrationId?: number)
+    : Promise<ContactRecord> {
     const freshFingerprint = await this.crypto.fingerprintIdentityKey(identityKey);
 
-    const previous = await this.contactsRepo.getContact(userId);
-    const changed = previous?.keyFingerprint != null && previous.keyFingerprint !== freshFingerprint;
+    const prev = await this.contactsRepo.getContact(userId);
+    const changed = prev?.keyFingerprint != null && prev.keyFingerprint !== freshFingerprint;
 
     const record: ContactRecord = {
       id: userId,
       identityKey,
-      registrationId: registrationId ?? previous?.registrationId ?? 0,
+      registrationId: registrationId ?? prev?.registrationId ?? 0,
       keyFingerprint: freshFingerprint,
       pinnedAt: Date.now()
     };

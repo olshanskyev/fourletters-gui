@@ -29,7 +29,7 @@ export interface Group {
     /**
      * The current roster.
      */
-    members: Array<GroupMember>;
+    members: GroupMember[];
     /**
      * Epoch milliseconds when the group was created.
      */

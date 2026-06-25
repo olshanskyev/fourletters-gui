@@ -1,10 +1,11 @@
 // Signal protocol store backed by the per-user Dexie database. Implements the library's StorageType
 // so SessionBuilder/SessionCipher can persist our identity, (signed) pre-keys, sessions, and the
-// trusted identity keys of contacts. Identities are auto-trusted (TOFU); a *changed* remote identity
-// is surfaced via identityChanged$ so ContactsService can re-pin and raise the "key changed" warning.
+// trusted identity keys of contacts. Identities are auto-trusted (TOFU); a learned or *changed*
+// remote identity is surfaced via identitySeen$ so ContactsService can pin it (raising the "key
+// changed" warning only on a real change) without a directory fetch.
 // Note: store methods are intentionally lock-free — callers wrap whole operations in withSignalLock.
 import { Injectable, inject } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { Direction, KeyPairType, SessionRecordType, StorageType } from '@privacyresearch/libsignal-protocol-typescript';
 import { AppDatabase } from '@core/services/database/app.database';
 import { Base64 } from '../../helpers';
@@ -16,9 +17,9 @@ const REG_ID_KEY = 'registrationId';
 export class SignalProtocolStore implements StorageType {
   private readonly appDb = inject(AppDatabase);
 
-  private readonly identityChangedSubject = new Subject<{ userId: string; identityKey: string }>();
-  /** Emits the contact whose Curve25519 identity just changed, carrying its new Base64 key so listeners re-pin without a directory fetch. */
-  readonly identityChanged$: Observable<{ userId: string; identityKey: string }> = this.identityChangedSubject.asObservable();
+  private readonly identitySeenSubject = new Subject<{ userId: string; identityKey: string }>();
+  /** Emits a contact's Base64 Curve25519 identity when first learned or changed, so listeners pin it without a directory fetch. */
+  readonly identitySeen$ = this.identitySeenSubject.asObservable();
 
   // --- Our identity --------------------------------------------------------------------
   async getIdentityKeyPair(): Promise<KeyPairType | undefined> {
@@ -32,7 +33,8 @@ export class SignalProtocolStore implements StorageType {
   }
 
   // --- Contact identities (trust-on-first-use, auto-accept changes) ---------------------
-  async isTrustedIdentity(_identifier: string, _identityKey: ArrayBuffer, _direction: Direction): Promise<boolean> {
+  async isTrustedIdentity(_identifier: string, _identityKey: ArrayBuffer, _direction: Direction)
+    : Promise<boolean> {
     return true; // auto-accept; the visible "key changed" warning is raised by ContactsService
   }
 
@@ -41,8 +43,8 @@ export class SignalProtocolStore implements StorageType {
     const existing = await this.appDb.signalRemoteIdentities.get(userId);
     const changed = existing != null && !buffersEqual(existing.identityKey, publicKey);
     await this.appDb.signalRemoteIdentities.put({ id: userId, identityKey: publicKey });
-    if (changed) {
-      this.identityChangedSubject.next({ userId, identityKey: Base64.bufferToBase64(publicKey) });
+    if (existing == null || changed) {
+      this.identitySeenSubject.next({ userId, identityKey: Base64.bufferToBase64(publicKey) });
     }
     return changed;
   }
@@ -53,7 +55,9 @@ export class SignalProtocolStore implements StorageType {
   }
 
   async storePreKey(keyId: string | number, keyPair: KeyPairType): Promise<void> {
-    await this.appDb.signalPreKeys.put({ id: String(keyId), pubKey: keyPair.pubKey, privKey: keyPair.privKey });
+    await this.appDb.signalPreKeys.put(
+      { id: String(keyId), pubKey: keyPair.pubKey, privKey: keyPair.privKey }
+    );
   }
 
   async removePreKey(keyId: string | number): Promise<void> {
@@ -66,7 +70,9 @@ export class SignalProtocolStore implements StorageType {
   }
 
   async storeSignedPreKey(keyId: string | number, keyPair: KeyPairType): Promise<void> {
-    await this.appDb.signalSignedPreKeys.put({ id: String(keyId), pubKey: keyPair.pubKey, privKey: keyPair.privKey });
+    await this.appDb.signalSignedPreKeys.put(
+      { id: String(keyId), pubKey: keyPair.pubKey, privKey: keyPair.privKey }
+    );
   }
 
   async removeSignedPreKey(keyId: string | number): Promise<void> {
@@ -123,7 +129,8 @@ function addressName(encodedAddress: string): string {
   return dot === -1 ? encodedAddress : encodedAddress.slice(0, dot);
 }
 
-function toKeyPair(rec: { pubKey: ArrayBuffer; privKey: ArrayBuffer } | undefined): KeyPairType | undefined {
+function toKeyPair(rec: { pubKey: ArrayBuffer; privKey: ArrayBuffer } | undefined)
+  : KeyPairType | undefined {
   return rec ? { pubKey: rec.pubKey, privKey: rec.privKey } : undefined;
 }
 

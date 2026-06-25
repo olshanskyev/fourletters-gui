@@ -11,6 +11,6 @@ import { KeysResponse } from './keysResponse';
 
 
 export interface PublicKeysBatchResponse { 
-    results: Array<KeysResponse>;
+    results: KeysResponse[];
 }
 

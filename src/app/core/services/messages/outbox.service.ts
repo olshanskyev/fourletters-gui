@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
-import { LocalMessage } from './models/messages.model';
+import { LocalMessage, DirectMessage, GroupMessage } from './models/messages.model';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { MessagesApiService } from './messages-api.service';
 import { SyncStateRepository } from './sync-state.repository';
@@ -43,11 +43,10 @@ export class OutboxService {
 
     // Build the outbox record (at-rest plaintext). Ciphertext is produced lazily during dispatch.
     const message: LocalMessage = {
+      ...routing,
       id,
       conversationId: convo.id,
       senderId: 'me', // Placeholder, real senderId the server calculates based on auth
-      recipientId: routing.recipientId,
-      groupId: routing.groupId,
       text: await this.secureMsg.encryptForAtRest(id, text),
       isMine: true,
       createdAt: time,
@@ -87,34 +86,37 @@ export class OutboxService {
   }
 
   /**
-   * Re-key and resend a 1:1 message after the recipient NACK'd it (they changed device). Opens a
-   * fresh session from their new bundle and re-encrypts — the one place re-encryption is correct.
+   * Re-key and resend a copy after the recipient NACK'd it (they changed device). Opens a fresh
+   * session from their new bundle and re-encrypts — the one place re-encryption is correct. For a
+   * group message it re-keys only the single member that NACK'd, identified by senderId.
    */
-  async resendAfterKeyChange(messageId: string): Promise<void> {
+  async resendAfterKeyChange(messageId: string, senderId: string): Promise<void> {
     const msg = await this.repository.getMessageById(messageId);
     if (!msg || !msg.isMine) {
       return;
     }
-    // Group copies are not re-keyed individually here; a member recovers on subsequent sends.
-    if (msg.groupId || !msg.recipientId) {
+    const targetId = msg.kind === 'group' ? senderId : msg.recipientId;
+    if (!targetId) {
       return;
     }
-    if (msg.nackResent) {
-      // Already retried once under a fresh key and still undecryptable: give up.
+    const nackResent = msg.nackResent ?? new Set<string>();
+    if (nackResent.has(targetId)) {
+      // Already retried this recipient once under a fresh key and still undecryptable: give up.
       await this.markFailed(msg);
       return;
     }
 
     try {
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-      const { payload } = await this.secureMsg.buildOutgoingPayload(msg.recipientId, plaintext, true);
-      msg.ciphers = { ...(msg.ciphers ?? {}), [msg.recipientId]: payload };
-      msg.nackResent = true;
+      const { payload } = await this.secureMsg.buildOutgoingPayload(targetId, plaintext, true);
+      msg.ciphers = { ...(msg.ciphers ?? {}), [targetId]: payload };
+      nackResent.add(targetId);
+      msg.nackResent = nackResent;
       msg.status = 'pending';
       await this.repository.updateMessage(msg);
 
       const res = await lastValueFrom(
-        this.messagesApi.sendMessage(msg.recipientId, payload, msg.id)
+        this.messagesApi.sendMessage(targetId, payload, msg.id, msg.groupId)
       );
       await this.confirmAccepted(msg.id, res);
     } catch (err) {
@@ -176,20 +178,15 @@ export class OutboxService {
   private async collectResends(
     pendingMessages: LocalMessage[],
     currentServerStartedAt: number
-  ): Promise<{ direct: LocalMessage[]; group: LocalMessage[] }> {
-    const direct: LocalMessage[] = [];
-    const group: LocalMessage[] = [];
+  ): Promise<{ direct: DirectMessage[]; group: GroupMessage[] }> {
+    const direct: DirectMessage[] = [];
+    const group: GroupMessage[] = [];
 
     for (const msg of pendingMessages) {
-      const isGroup = !!msg.groupId;
-      if (!isGroup && !msg.recipientId) {
-        continue; // direct messages always carry a recipient
-      }
-      const bucket = isGroup ? group : direct;
-
+      let include = false;
       if (msg.status === 'pending') {
         // Never accepted by the Server (the initial send failed): re-attempt once.
-        bucket.push(msg);
+        include = true;
       } else if (
         msg.status === 'accepted' &&
         msg.serverStartedAt !== currentServerStartedAt &&
@@ -198,7 +195,15 @@ export class OutboxService {
         // Accepted, then the Server restarted before delivering it: re-push once.
         msg.retryCount = 1;
         await this.repository.updateMessage(msg);
-        bucket.push(msg);
+        include = true;
+      }
+      if (!include) {
+        continue;
+      }
+      if (msg.kind === 'group') {
+        group.push(msg);
+      } else {
+        direct.push(msg);
       }
     }
 
@@ -209,10 +214,10 @@ export class OutboxService {
    * Re-submit a batch of direct messages, re-transmitting each one's stored ciphertext. Accepted
    * copies move to 'accepted'; any never-accepted message is marked 'failed'.
    */
-  private async resendDirectBatch(chunk: LocalMessage[]): Promise<void> {
+  private async resendDirectBatch(chunk: DirectMessage[]): Promise<void> {
     const messages: EncryptedMessage[] = [];
     for (const msg of chunk) {
-      const recipientId = msg.recipientId!;
+      const recipientId = msg.recipientId;
       const payload = await this.cipherFor(msg, recipientId);
       messages.push({ messageId: msg.id, recipientId, payload });
     }
@@ -250,10 +255,7 @@ export class OutboxService {
   /**
    * Re-fan a group message (already selected by collectResends) to the current roster.
    */
-  private async resyncGroupMessage(msg: LocalMessage): Promise<void> {
-    if (!msg.groupId) {
-      return;
-    }
+  private async resyncGroupMessage(msg: GroupMessage): Promise<void> {
     const wasPending = msg.status === 'pending';
 
     try {
@@ -274,35 +276,32 @@ export class OutboxService {
   /** Resolve a conversation's routing: the direct peer, or the group it fans out to. */
   private async resolveRouting(
     convo: LocalConversation
-  ): Promise<{ recipientId?: string; groupId?: string } | undefined> {
+  ): Promise<{ kind: 'direct'; recipientId: string } | { kind: 'group'; groupId: string } | undefined> {
     if (convo.type === 'group') {
       if (!convo.groupId) {
         console.error('Group conversation missing groupId. Message sending failed.', convo.id);
         return undefined;
       }
-      return { groupId: convo.groupId };
+      return { kind: 'group', groupId: convo.groupId };
     }
     const recipientId = convo.participants?.[0];
     if (!recipientId) {
       console.error('No recipient found for conversation. Message sending failed.', convo.id);
       return undefined;
     }
-    return { recipientId };
+    return { kind: 'direct', recipientId };
   }
 
   /** Transmit a message's ciphertext to its destination: a group fan-out or a single 1:1 send. */
   private dispatch(msg: LocalMessage): Promise<AcceptedResponse | undefined> {
-    if (msg.groupId) {
-      return this.fanOutGroup(msg);
-    }
-    if (msg.recipientId) {
-      return this.sendDirect(msg, msg.recipientId);
-    }
-    return Promise.resolve(undefined);
+    return msg.kind === 'group'
+      ? this.fanOutGroup(msg)
+      : this.sendDirect(msg, msg.recipientId);
   }
 
   /** Transmit the stored 1:1 ciphertext to a single recipient. */
-  private async sendDirect(msg: LocalMessage, recipientId: string): Promise<AcceptedResponse | undefined> {
+  private async sendDirect(msg: DirectMessage, recipientId: string)
+    : Promise<AcceptedResponse | undefined> {
     const payload = await this.cipherFor(msg, recipientId);
     await this.repository.updateMessage(msg).catch(() => undefined); // persist a freshly created cipher
     return lastValueFrom(this.messagesApi.sendMessage(recipientId, payload, msg.id));
@@ -313,8 +312,8 @@ export class OutboxService {
    * message's id and carrying the groupId for threading. Reuses each member's stored ciphertext and
    * only encrypts for members that lack one (e.g. joined since the message was first sent).
    */
-  private async fanOutGroup(msg: LocalMessage): Promise<AcceptedResponse | undefined> {
-    const groupId = msg.groupId!;
+  private async fanOutGroup(msg: GroupMessage): Promise<AcceptedResponse | undefined> {
+    const groupId = msg.groupId;
     const myId = this.auth.currentUser()?.id;
     const members = (await this.groups.getMembers(groupId)).filter(memberId => memberId !== myId);
 
@@ -350,7 +349,8 @@ export class OutboxService {
    * Persist a freshly built outgoing message to the local outbox and refresh the conversation
    * preview with its plaintext.
    */
-  private async persistOutgoing(message: LocalMessage, previewText: string, time: number): Promise<void> {
+  private async persistOutgoing(message: LocalMessage, previewText: string, time: number)
+    : Promise<void> {
     await this.repository.addMessage(message);
     await this.conversationsService.updateLastMessage(message.conversationId, previewText, time);
   }
