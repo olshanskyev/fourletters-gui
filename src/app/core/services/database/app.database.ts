@@ -17,6 +17,14 @@ export interface ContactRecord {
   pinnedAt?: number; // epoch ms when keyFingerprint was last pinned
 }
 
+export interface UserProfileRecord {
+  id: string; // userId
+  username?: string;
+  avatarUrl?: string;
+  localName?: string; // fallback customizable local name
+  updatedAt: number; // epoch ms
+}
+
 // --- Signal protocol store records (keys are ArrayBuffers, sessions are serialized strings) ---
 export interface SignalIdentityRecord { id: 'identityKeyPair' | 'registrationId' | 'nextPreKeyId'; value: any; }
 export interface SignalKeyPairRecord { id: string; pubKey: ArrayBuffer; privKey: ArrayBuffer; }
@@ -38,6 +46,7 @@ export class UserDatabase extends Dexie {
   contacts!: Table<ContactRecord, string>;
   meta!: Table<MetaRecord, string>;
   groups!: Table<GroupRecord, string>;
+  profiles!: Table<UserProfileRecord, string>;
   signalIdentity!: Table<SignalIdentityRecord, string>;
   signalPreKeys!: Table<SignalKeyPairRecord, string>;
   signalSignedPreKeys!: Table<SignalKeyPairRecord, string>;
@@ -53,6 +62,7 @@ export class UserDatabase extends Dexie {
       contacts: 'id',
       meta: 'id',
       groups: 'id, ownerId',
+      profiles: 'id, updatedAt',
       signalIdentity: 'id',
       signalPreKeys: 'id',
       signalSignedPreKeys: 'id',
@@ -93,6 +103,7 @@ export class AppDatabase {
   get contacts() { return this.db.contacts; }
   get meta() { return this.db.meta; }
   get groups() { return this.db.groups; }
+  get profiles() { return this.db.profiles; }
   get signalIdentity() { return this.db.signalIdentity; }
   get signalPreKeys() { return this.db.signalPreKeys; }
   get signalSignedPreKeys() { return this.db.signalSignedPreKeys; }

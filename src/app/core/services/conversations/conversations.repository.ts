@@ -33,11 +33,31 @@ export class ConversationsRepository {
   }
 
   /**
-   * Observe all conversations (sorted by latest activity)
+   * Observe conversations projected through `project`, within a single live query. Any Dexie reads
+   * performed by `project` (e.g. cached profiles/groups) are tracked too, so the stream re-emits
+   * when that metadata changes.
    */
-  observeConversations(): Observable<LocalConversation[]> {
-     return from(
-      liveQuery(() => this.db.conversations.orderBy('updatedAt').reverse().toArray())
+  observeConversationsProjected<T>(
+    project: (conversations: LocalConversation[]) => Promise<T>
+  ): Observable<T> {
+    return from(
+      liveQuery(() =>
+        this.db.conversations.orderBy('updatedAt').reverse().toArray().then(project)
+      )
+    );
+  }
+
+  /**
+   * Observe a single conversation projected through `project`, within one live query. Like
+   * {@link observeConversationsProjected}, any Dexie reads `project` performs are tracked, so the
+   * stream re-emits when the conversation or its cached metadata changes.
+   */
+  observeConversationProjected<T>(
+    id: string,
+    project: (conversation: LocalConversation | undefined) => Promise<T>
+  ): Observable<T> {
+    return from(
+      liveQuery(() => this.db.conversations.get(id).then(project))
     );
   }
 }

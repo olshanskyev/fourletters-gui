@@ -3,7 +3,8 @@ import { MatCardModule } from '@angular/material/card';
 import { MatInputModule } from '@angular/material/input';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { GoogleAuthService, VKAuthService } from '@core/services/authentication';
+import { AuthService, GoogleAuthService, VKAuthService } from '@core/services/authentication';
+
 
 @Component({
   selector: 'app-home',
@@ -30,5 +31,10 @@ export class HomeComponent implements AfterViewInit {
     if (this.googleButtonContainer()) {
       this.googleService.renderOneTap(this.googleButtonContainer()!, {width: 300});
     }
+  }
+
+  authService = inject(AuthService);
+  dummyLogin() {
+    this.authService.auth('dummy', 'dummy');
   }
 }

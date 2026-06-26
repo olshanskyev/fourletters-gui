@@ -1,25 +1,11 @@
-<ng-template #conversationList>
-  <app-conversations />
-</ng-template>
+<app-split-layout [class.has-chat]="!!id" class="adaptive-layout h-full">
+  <div master class="h-full">
+    <app-conversations />
+  </div>
 
-<div class="mobile-only h-full">
-  <!-- Mobile: Show Chat if an ID is present in the route, otherwise show the list -->
-  @if (!id) {
-    <ng-container *ngTemplateOutlet="conversationList" />
-  } @else {
-    <app-chat [conversationId]="id" />
-  }
-</div>
-
-<div class="desktop-only h-full">
-  <!-- Desktop: Always show Master/Detail view -->
-  <app-split-layout>
-    <div master class="h-full">
-      <ng-container *ngTemplateOutlet="conversationList" />
-    </div>
-
-    <div detail class="default-background-gradient h-full">
-        <app-chat [conversationId]="id" [showBackButton]="false" />
-    </div>
-  </app-split-layout>
-</div>
+  <div detail class="default-background-gradient h-full wrapper-chat">
+    @if (id) {
+      <app-chat [conversationId]="id" [showBackButton]="true" />
+    }
+  </div>
+</app-split-layout>

@@ -7,8 +7,8 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { OneTimePreKeyDto } from './oneTimePreKeyDto';
-import { SignedPreKeyDto } from './signedPreKeyDto';
+import { SignedPreKey } from './signedPreKey';
+import { OneTimePreKey } from './oneTimePreKey';
 
 
 /**
@@ -23,8 +23,8 @@ export interface PublicKeySet {
      * Long-lived Curve25519 identity public key (Base64).
      */
     identityKey: string;
-    signedPreKey: SignedPreKeyDto;
-    oneTimePreKey?: OneTimePreKeyDto;
+    signedPreKey: SignedPreKey;
+    oneTimePreKey?: OneTimePreKey;
     /**
      * Epoch milliseconds when this bundle was uploaded to the directory.
      */

@@ -24,6 +24,7 @@ export const routes: Routes = [
     canActivateChild: [loggedInGuard],
     children: [
       { path: '', component: MainComponent },
+      { path: 'invite/:inviteTargetId', component: MainComponent },
       { path: ':id', component: MainComponent }
     ]
   },

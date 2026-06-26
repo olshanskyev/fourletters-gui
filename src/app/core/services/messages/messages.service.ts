@@ -156,29 +156,13 @@ export class MessagesService {
   }
 
   /**
-   * Find (or lazily create) the local conversation an incoming message belongs to. Group messages
+   * Find (or lazily create) the local conversation an incoming message belongs to.
    */
-  private async resolveIncomingConversation(encryptedMessage: EncryptedMessage | any)
-    : Promise<string> {
+  private resolveIncomingConversation(encryptedMessage: EncryptedMessage | any): Promise<string> {
     const { groupId, senderId } = encryptedMessage;
-
-    if (groupId) {
-      const existing = await this.conversationsService.getGroupConversation(groupId);
-      if (existing) {
-        return existing.id;
-      }
-      // ToDo - fetch group metadata?
-      const created = await this.conversationsService.createConversation('Group', 'group', [senderId], groupId);
-      return created.id;
-    }
-
-    const existing = await this.conversationsService.getDirectConversationWith(senderId);
-    if (existing) {
-      return existing.id;
-    }
-    // ToDo - fetch contact info?
-    const created = await this.conversationsService.createConversation('Unknown Contact', 'direct', [senderId]);
-    return created.id;
+    return groupId
+      ? this.conversationsService.ensureGroupConversation(groupId)
+      : this.conversationsService.ensureDirectConversation(senderId);
   }
 
   /**

@@ -7,8 +7,8 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { OneTimePreKeyDto } from './oneTimePreKeyDto';
-import { SignedPreKeyDto } from './signedPreKeyDto';
+import { SignedPreKey } from './signedPreKey';
+import { OneTimePreKey } from './oneTimePreKey';
 
 
 /**
@@ -23,10 +23,10 @@ export interface KeysUploadRequest {
      * The caller\'s long-lived Curve25519 identity public key (Base64).
      */
     identityKey: string;
-    signedPreKey: SignedPreKeyDto;
+    signedPreKey: SignedPreKey;
     /**
      * Initial pool of one-time pre-keys; the server hands one out per session and deletes it.
      */
-    oneTimePreKeys: OneTimePreKeyDto[];
+    oneTimePreKeys: OneTimePreKey[];
 }
 

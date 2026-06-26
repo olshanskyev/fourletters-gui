@@ -8,7 +8,7 @@
               <mat-icon>arrow_back</mat-icon>
             </button>
           }
-          <button matButton (click)="openChatDetails()">Chat {{ conversationId() }}</button>
+          <button matButton (click)="openChatDetails()">{{ conversation.value()?.title ?? 'Chat' }}</button>
         </div>
         <div>
           <button matIconButton>

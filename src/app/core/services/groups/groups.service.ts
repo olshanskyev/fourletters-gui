@@ -6,9 +6,10 @@ import {
   Group,
   UpdateMembersRequest
 } from '@dto/models';
-import { ConversationsService } from '@core/services/conversations/conversations.service';
+import { GroupRecord } from '@core/services/database/app.database';
 import { GroupsApiService } from './groups-api.service';
 import { GroupsRepository } from './groups.repository';
+import { staleWhileRevalidate } from '@core/services/cache/swr-cache';
 
 /**
  * High-level group management: creating groups, owner-only roster changes, and leaving. The Server
@@ -20,8 +21,23 @@ import { GroupsRepository } from './groups.repository';
 })
 export class GroupsService {
   private api = inject(GroupsApiService);
-  private conversations = inject(ConversationsService);
   private groupsRepo = inject(GroupsRepository);
+
+  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  /**
+   * Retrieves a group. Uses Stale-While-Revalidate caching strategy.
+   * Returns immediately if cached, but fetches in background if stale.
+   */
+  getGroup(groupId: string, forceRefresh = false): Promise<GroupRecord | undefined> {
+    return staleWhileRevalidate({
+      readCache: () => this.groupsRepo.getGroup(groupId),
+      revalidate: () => this.fetchAndCacheGroup(groupId),
+      ttlMs: this.CACHE_TTL_MS,
+      forceRefresh,
+      onBackgroundError: err => console.error('Background group refresh failed', err)
+    });
+  }
 
   /** Create a group with the caller as owner. */
   async createGroup(name: string, memberIds: string[]): Promise<Group> {
@@ -89,23 +105,24 @@ export class GroupsService {
   }
 
   private async persistGroup(group: Group): Promise<void> {
-    await this.groupsRepo.putGroup({
+    await this.groupsRepo.putGroup(this.toRecord(group));
+  }
+
+  private async fetchAndCacheGroup(groupId: string): Promise<GroupRecord> {
+    const group = await lastValueFrom(this.api.getGroup(groupId));
+    const record = this.toRecord(group);
+    await this.groupsRepo.putGroup(record);
+    return record;
+  }
+
+  private toRecord(group: Group): GroupRecord {
+    return {
       id: group.id,
       name: group.name,
       ownerId: group.ownerId,
       members: group.members.map(m => m.userId),
       updatedAt: group.updatedAt ?? Date.now()
-    });
-
-    const existing = await this.conversations.getGroupConversation(group.id);
-    if (!existing) {
-      await this.conversations.createConversation(
-        group.name,
-        'group',
-        group.members.map(m => m.userId),
-        group.id
-      );
-    }
+    };
   }
 
   private async removeLocalGroup(groupId: string): Promise<void> {

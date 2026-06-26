@@ -21,3 +21,38 @@
 .detail-wrapper {
   background-color: var(--mat-sys-surface-container-low);
 }
+
+:host ::ng-deep .adaptive-layout {
+  @include bp.bp-lt(medium) {
+    // Mobile: master takes full width and detail is hidden by default
+    .master-pane {
+      width: 100%;
+      border-right: none;
+    }
+
+    .detail-pane {
+      display: none;
+      width: 100%;
+    }
+
+    // Mobile: when chat is open, master is hidden and detail is full width
+    &.has-chat {
+      .master-pane {
+        display: none;
+      }
+
+      .detail-pane {
+        display: flex;
+      }
+    }
+  }
+
+  // Hide the chat's back button on desktop since we always see both panes
+  @include bp.bp-gt(medium) {
+    .wrapper-chat app-chat {
+      .chat-header button[routerlink="/m"] {
+        display: none !important;
+      }
+    }
+  }
+}

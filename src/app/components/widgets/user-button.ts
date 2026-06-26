@@ -4,9 +4,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 import { MatDividerModule } from '@angular/material/divider';
 import { AuthService } from '@core/services/authentication/auth.service';
+import { InviteDialogComponent } from '../dialogs/invite-dialog/invite-dialog.component';
 
 @Component({
   selector: 'app-user-button',
@@ -22,6 +24,10 @@ import { AuthService } from '@core/services/authentication/auth.service';
         </button>
         <mat-divider/>
       }
+      <button mat-menu-item (click)="openInviteDialog()">
+        <mat-icon>person_add</mat-icon>
+        <span>Invite friends</span>
+      </button>
       <button mat-menu-item (click)="logout()">
         <mat-icon>exit_to_app</mat-icon>
         <span>{{ 'logout' | translate }}</span>
@@ -45,13 +51,21 @@ import { AuthService } from '@core/services/authentication/auth.service';
     }
   `,
   imports: [MatButtonModule, MatIconModule,
-    MatMenuModule, TranslateModule, MatDividerModule],
+    MatMenuModule, TranslateModule, MatDividerModule, MatDialogModule],
 })
 export class UserButton {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   user = this.auth.currentUser;
+
+  openInviteDialog() {
+    this.dialog.open(InviteDialogComponent, {
+      width: '400px',
+      maxWidth: '90vw'
+    });
+  }
 
   logout() {
     this.auth.logout().subscribe(() => {

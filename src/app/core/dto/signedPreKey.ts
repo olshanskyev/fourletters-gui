@@ -12,7 +12,7 @@
 /**
  * A Signal signed pre-key: a medium-lived Curve25519 public key signed by the identity key.
  */
-export interface SignedPreKeyDto { 
+export interface SignedPreKey { 
     /**
      * Client-assigned id of this signed pre-key.
      */

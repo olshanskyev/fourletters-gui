@@ -4,7 +4,6 @@
 // verifies receipts with the Curve25519 identity key (receipts travel via the Server, not the ratchet).
 // Every high-level operation runs under withSignalLock so concurrent tabs can't corrupt ratchet state.
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
 import SignalProtocol, {
   Curve,
   KeyHelper,
@@ -12,7 +11,7 @@ import SignalProtocol, {
   SessionCipher,
   SignalProtocolAddress
 } from '@privacyresearch/libsignal-protocol-typescript';
-import { KeysUploadRequest, OneTimePreKeyDto, PublicKeySet } from '@dto/models';
+import { KeysUploadRequest, OneTimePreKey, PublicKeySet } from '@dto/models';
 import { AppDatabase } from '@core/services/database/app.database';
 import { Base64 } from '../../helpers';
 import { SignalProtocolStore } from './signal-store';
@@ -72,7 +71,7 @@ export class SignalSessionService {
   }
 
   /** Generate and store a fresh batch of one-time pre-keys (used to replenish the server pool). */
-  generateMorePreKeys(count: number): Promise<OneTimePreKeyDto[]> {
+  generateMorePreKeys(count: number): Promise<OneTimePreKey[]> {
     return withSignalLock(this.appDb.userId, () => this.generateAndStorePreKeys(count));
   }
 
@@ -161,9 +160,9 @@ export class SignalSessionService {
   }
 
   // --- internals -----------------------------------------------------------------------
-  private async generateAndStorePreKeys(count: number): Promise<OneTimePreKeyDto[]> {
+  private async generateAndStorePreKeys(count: number): Promise<OneTimePreKey[]> {
     const ids = await this.store.takePreKeyIds(count);
-    const dtos: OneTimePreKeyDto[] = [];
+    const dtos: OneTimePreKey[] = [];
     for (const keyId of ids) {
       const preKey = await KeyHelper.generatePreKey(keyId);
       await this.store.storePreKey(keyId, preKey.keyPair);

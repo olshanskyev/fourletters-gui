@@ -12,7 +12,7 @@
 /**
  * A Signal one-time pre-key, consumed once when a peer opens a session.
  */
-export interface OneTimePreKeyDto { 
+export interface OneTimePreKey { 
     /**
      * Client-assigned id of this one-time pre-key.
      */

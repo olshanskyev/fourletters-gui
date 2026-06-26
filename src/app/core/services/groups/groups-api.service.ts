@@ -9,10 +9,6 @@ import {
   UpdateMembersRequest
 } from '@dto/models';
 
-/**
- * REST client for the Server's group endpoints. The Server owns the roster; a group message is
- * sent by the client as one independent 1:1 copy per member, so no group key crosses the Server.
- */
 @Injectable({
   providedIn: 'root'
 })

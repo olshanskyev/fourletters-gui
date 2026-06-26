@@ -1,8 +1,5 @@
  <app-list-layout>
     <div header class="default-header justify-content-between gap-8">
-      <!--<button matIconButton aria-label="Example icon button with a menu icon">
-        <mat-icon>menu</mat-icon>
-      </button>-->
       <app-user-button />
       <mat-form-field class="form-field-5 w-full" appearance="outline" subscriptSizing="dynamic">
         <mat-icon matSuffix>search</mat-icon>
@@ -16,7 +13,7 @@
         <div class="d-flex align-items-center p-16 conversation-item" [routerLink]="['/m', chat.id]" routerLinkActive="active-chat">
           <div class="avatar"></div>
           <div class="d-flex flex-col">
-            <span class="f-w-600">{{ chat.name }}</span>
+            <span class="f-w-600">{{ chat.title }}</span>
             <span class="f-s-14">{{ chat.lastMessageText || 'No messages yet' }}</span>
           </div>
         </div>

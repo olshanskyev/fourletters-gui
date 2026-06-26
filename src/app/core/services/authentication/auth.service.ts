@@ -68,7 +68,7 @@ export class AuthService {
     });
   }
 
-  private auth(token: string, provider: string) {
+  public auth(token: string, provider: string) {
     const authRequest: AuthRequest = {
       token
     };

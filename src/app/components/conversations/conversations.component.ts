@@ -29,12 +29,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 export class ConversationsComponent {
   private conversationsService = inject(ConversationsService);
 
-  // Automatically streams and sorts conversations from IndexedDB!
-  conversations = toSignal(this.conversationsService.observeConversations(), { initialValue: [] });
-
-  constructor() {
-    //ToDo why called twice on startup? (once for each route)
-    //console.log('ConversationsComponent constructor');
-    //this.conversationsService.createConversation('NAME', 'direct', ['8698437b-3b73-4a7b-80fb-a9d6f0528617']);
-  }
+  // Automatically streams and sorts conversations from IndexedDB
+  conversations = toSignal(this.conversationsService.observeConversationViews(),
+  { initialValue: [] });
 }

@@ -277,14 +277,14 @@ export class OutboxService {
   private async resolveRouting(
     convo: LocalConversation
   ): Promise<{ kind: 'direct'; recipientId: string } | { kind: 'group'; groupId: string } | undefined> {
-    if (convo.type === 'group') {
+    if (convo.kind === 'group') {
       if (!convo.groupId) {
         console.error('Group conversation missing groupId. Message sending failed.', convo.id);
         return undefined;
       }
       return { kind: 'group', groupId: convo.groupId };
     }
-    const recipientId = convo.participants?.[0];
+    const recipientId = convo.peerId;
     if (!recipientId) {
       console.error('No recipient found for conversation. Message sending failed.', convo.id);
       return undefined;

@@ -7,7 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
-import { OneTimePreKeyDto } from './oneTimePreKeyDto';
+import { OneTimePreKey } from './oneTimePreKey';
 
 
 /**
@@ -17,6 +17,6 @@ export interface PreKeysUploadRequest {
     /**
      * Additional one-time pre-keys to append to the caller\'s pool.
      */
-    oneTimePreKeys: OneTimePreKeyDto[];
+    oneTimePreKeys: OneTimePreKey[];
 }
 
