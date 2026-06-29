@@ -28,6 +28,10 @@ export class UsersService {
     });
   }
 
+  getContactList(): Promise<UserProfileRecord[]> {
+    return this.repository.getAllProfiles();
+  }
+
   private async fetchAndCacheProfile(userId: string): Promise<UserProfileRecord> {
     const dto = await lastValueFrom(this.api.getUser(userId));
     const cached = await this.repository.getProfile(userId);

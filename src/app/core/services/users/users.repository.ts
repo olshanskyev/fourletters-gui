@@ -11,6 +11,10 @@ export class UsersRepository {
     return this.db.profiles.get(userId);
   }
 
+  async getAllProfiles(): Promise<UserProfileRecord[]> {
+    return this.db.profiles.toArray();
+  }
+
   async putProfile(profile: UserProfileRecord): Promise<void> {
     await this.db.profiles.put(profile);
   }

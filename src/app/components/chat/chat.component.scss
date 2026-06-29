@@ -20,6 +20,7 @@ app-chat-layout {
   flex-direction: column;
   max-width: 80%;
   padding: 0.25rem 0.5rem;
+  overflow-wrap: break-word;
   border-radius: var(--mat-sys-corner-large);
 
   .opacity-60 {

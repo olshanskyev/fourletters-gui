@@ -14,7 +14,6 @@ export class SidePanelService {
 
   close() {
     this.isOpen.set(false);
-    // Optionally clear it after animation finishes, but leaving it is fine
   }
 
   toggle() {

@@ -6,6 +6,7 @@ import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
 import { UserResponse } from '@core/dto/userResponse';
 import { MessagesService } from '@core/services/messages/messages.service';
+import { GroupsService } from '@core/services/groups/groups.service';
 import { IdentityService } from '@core/services/identity/identity.service';
 
 @Injectable({
@@ -15,6 +16,7 @@ export class StartupService {
   private readonly authService = inject(AuthService);
   private readonly rolesService = inject(NgxRolesService);
   private readonly messagesService = inject(MessagesService);
+  private readonly groupsService = inject(GroupsService);
   private readonly identityService = inject(IdentityService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -54,6 +56,8 @@ export class StartupService {
                     } catch (e) {
                       console.error('Failed to initialize local crypto identity keys. Pausing message stream', e);
                     }
+                    // Roster sync is non-critical and independent of crypto/messaging
+                    this.groupsService.syncGroups().catch(e => console.error('Failed to sync groups', e));
                   } else {
                     this.messagesService.stopListening();
                   }

@@ -4,6 +4,7 @@ import { lastValueFrom } from 'rxjs';
 import {
   CreateGroupRequest,
   Group,
+  GroupSummary,
   UpdateMembersRequest
 } from '@dto/models';
 import { GroupRecord } from '@core/services/database/app.database';
@@ -48,11 +49,11 @@ export class GroupsService {
     return group;
   }
 
-  /** Reconcile the caller's group list from the Server, refreshing local rosters. */
+  /** Reconcile the caller's group list from the Server. One request; rosters load lazily on demand. */
   async syncGroups(): Promise<void> {
     const summaries = await lastValueFrom(this.api.listGroups());
     for (const summary of summaries) {
-      await this.refreshGroup(summary.id);
+      await this.persistSummary(summary);
     }
   }
 
@@ -88,9 +89,11 @@ export class GroupsService {
     return group.members.map(m => m.userId);
   }
 
-  /** Whether a user is in a group's locally known roster (used to authorize group receipts). */
+  /**
+   * Whether a user is in a group's roster (used to authorize group receipts).
+   */
   async isMember(groupId: string, userId: string): Promise<boolean> {
-    const group = await this.groupsRepo.getGroup(groupId);
+    const group = await this.getGroup(groupId);
     return group?.members.includes(userId) ?? false;
   }
 
@@ -106,6 +109,20 @@ export class GroupsService {
 
   private async persistGroup(group: Group): Promise<void> {
     await this.groupsRepo.putGroup(this.toRecord(group));
+  }
+
+  /**
+   * Cache a group's summary (name, owner) without fetching its roster.
+   */
+  private async persistSummary(summary: GroupSummary): Promise<void> {
+    const existing = await this.groupsRepo.getGroup(summary.id);
+    await this.groupsRepo.putGroup({
+      id: summary.id,
+      name: summary.name,
+      ownerId: summary.ownerId,
+      members: existing?.members ?? [],
+      updatedAt: 0 // stale: roster is fetched lazily on first getGroup
+    });
   }
 
   private async fetchAndCacheGroup(groupId: string): Promise<GroupRecord> {

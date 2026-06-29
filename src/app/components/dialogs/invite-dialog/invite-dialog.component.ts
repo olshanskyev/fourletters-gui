@@ -42,6 +42,8 @@ import { AuthService } from '@core/services/authentication/auth.service';
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Close</button>
     </mat-dialog-actions>
+  `,
+  styles: `
   `
 })
 export class InviteDialogComponent {

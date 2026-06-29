@@ -1,0 +1,22 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.contact-item {
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: var(--mat-sys-surface-container-high);
+  }
+}
+
+.invite-button {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+
+}
+

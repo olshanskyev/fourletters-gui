@@ -8,7 +8,19 @@
               <mat-icon>arrow_back</mat-icon>
             </button>
           }
-          <button matButton (click)="openChatDetails()">{{ conversation.value()?.title ?? 'Chat' }}</button>
+          <button matButton (click)="openChatDetails()" class="p-l-4">
+            <span class="d-flex align-items-center gap-8">
+              @if (conversation.value()?.avatarUrl) {
+                <img [src]="conversation.value()?.avatarUrl" class="avatar -small" alt="avatar" referrerpolicy="no-referrer" />
+              } @else {
+                <div class="avatar -small default-avatar"></div>
+              }
+              <span>
+                {{ conversation.value()?.title ?? 'Chat' }}
+              </span>
+            </span>
+
+          </button>
         </div>
         <div>
           <button matIconButton>
@@ -79,6 +91,7 @@
               cdkAutosizeMaxRows="5"
               placeholder="Message"
               [(ngModel)]="messageText"
+              (keydown.enter)="$event.preventDefault(); sendMessage()"
             ></textarea>
 
             <button matSuffix matIconButton class="m-r-4" (click)="sendMessage()">

@@ -1,0 +1,19 @@
+<div class="sliding-panel" [class.slide-out]="step() !== 'contacts'">
+  <app-contacts [selectionMode]="true" [(selectedContacts)]="invitedUsers" />
+  <button matFab class="action-button" (click)="step.set('groupInfo')">
+    <mat-icon>arrow_forward</mat-icon>
+  </button>
+</div>
+
+<div class="sliding-panel"
+  [class.slide-in]="step() === 'groupInfo'">
+  <app-group-info [(groupName)]="groupName" />
+  <button matFab class="action-button" (click)="createGroup()" [hidden]="groupName() === ''">
+    <mat-icon>arrow_forward</mat-icon>
+  </button>
+</div>
+
+
+
+
+

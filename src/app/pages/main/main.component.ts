@@ -4,8 +4,11 @@ import { Router, RouterModule } from '@angular/router';
 import { SplitLayoutComponent } from '@layouts/split-layout/split-layout.component';
 import { ChatComponent } from '@components/chat/chat.component';
 import { ConversationsComponent } from '@components/conversations/conversations.component';
+import { ContactsComponent } from '@components/contacts/contacts.component';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { AuthService } from '@core/services/authentication/auth.service';
+import { MasterViewService } from '@core/services/shared/master-view.service';
+import { CreateGroupComponent } from '@components/create-group/create-group.component';
 
 @Component({
   selector: 'app-main',
@@ -17,7 +20,9 @@ import { AuthService } from '@core/services/authentication/auth.service';
     RouterModule,
     SplitLayoutComponent,
     ChatComponent,
-    ConversationsComponent
+    ConversationsComponent,
+    ContactsComponent,
+    CreateGroupComponent
 ]
 })
 export class MainComponent implements OnInit {
@@ -27,6 +32,7 @@ export class MainComponent implements OnInit {
   private readonly conversationsService = inject(ConversationsService);
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
+  readonly masterViewService = inject(MasterViewService);
 
   async ngOnInit() {
     if (this.inviteTargetId) {

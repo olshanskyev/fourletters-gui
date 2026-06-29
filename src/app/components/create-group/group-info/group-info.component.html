@@ -1,0 +1,25 @@
+<app-list-layout>
+  <div header class="default-header">
+    <div class="d-flex align-items-center gap-8">
+      <button mat-icon-button (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <span class="f-s-18">New Group</span>
+    </div>
+  </div>
+  <div body class="p-y-4 p-x-4">
+    <div class="p-16">
+      <mat-form-field class="w-full" appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Group Name</mat-label>
+          <textarea matInput
+            rows="1"
+            cdkTextareaAutosize
+            cdkAutosizeMaxRows="5"
+            placeholder="Group Name"
+            [(ngModel)]="groupName"
+          ></textarea>
+
+        </mat-form-field>
+    </div>
+  </div>
+</app-list-layout>

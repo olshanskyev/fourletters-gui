@@ -1,6 +1,21 @@
 <app-split-layout [class.has-chat]="!!id" class="adaptive-layout h-full">
-  <div master class="h-full">
-    <app-conversations />
+  <div master class="h-full relative overflow-hidden">
+    <div class="sliding-panel" [class.slide-out]="masterViewService.currentView() !== 'conversations'">
+      <app-conversations />
+    </div>
+    <div class="sliding-panel"
+    [class.slide-in]="
+      masterViewService.currentView() === 'contacts' ||
+      masterViewService.currentView() === 'create-group'
+    ">
+      @if (masterViewService.currentView() === 'contacts') {
+        <app-contacts/>
+      }
+      @if (masterViewService.currentView() === 'create-group') {
+        <app-create-group/>
+      }
+
+    </div>
   </div>
 
   <div detail class="default-background-gradient h-full wrapper-chat">

@@ -9,6 +9,9 @@ import { ListLayoutComponent } from '@layouts/list-layout/list-layout.component'
 import { UserButton } from '../widgets/user-button';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
+import { MasterViewService } from '@core/services/shared/master-view.service';
 
 @Component({
   selector: 'app-conversations',
@@ -23,13 +26,24 @@ import { toSignal } from '@angular/core/rxjs-interop';
     MatInputModule,
     MatButtonModule,
     MatIconModule,
-    UserButton
+    UserButton,
+    MatMenuModule,
+    MatDividerModule
   ]
 })
 export class ConversationsComponent {
   private conversationsService = inject(ConversationsService);
+  private masterViewService = inject(MasterViewService);
 
   // Automatically streams and sorts conversations from IndexedDB
   conversations = toSignal(this.conversationsService.observeConversationViews(),
   { initialValue: [] });
+
+  newGroup () {
+    this.masterViewService.setView('create-group');
+  }
+
+  newChat() {
+    this.masterViewService.setView('contacts');
+  }
 }
