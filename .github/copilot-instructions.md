@@ -1,5 +1,7 @@
 # Project Context: fourletters-gui
 
+> Always refer to this document to understand the workspace structure, commands, and tech stack before writing or rewriting any code in this repository.
+
 This document provides context for the `fourletters-gui` project, an Angular-based PWA application.
 
 ## Project Overview
@@ -66,10 +68,12 @@ npm run lint
 
 The application follows a standard Angular architecture with the following key components:
 
+- **`src/app/components`**: Contains the reusable UI components of the application.
 - **`src/app/core`**: Contains the core services, models, and interceptors for the application.
-- **`src/app/routes`**: Contains the different routes of the application, such as the dashboard, admin section, and session pages.
-- **`src/app/shared`**: Contains shared components, directives, and pipes that are used throughout the application.
-- **`src/app/theme`**: Contains the theming and layout components for the application.
+- **`src/app/layouts`**: Contains the different layouts of the application.
+- **`src/app/pages`**: Contains the different pages of the application.
+- **`src/environments`**: Contains environment-specific configuration files.
+- **`src/styles`**: Contains the global styles for the application.
 - **`public`**: Contains static assets such as images, fonts, and data files.
 
 ### Additional Coding Preferences
@@ -80,5 +84,5 @@ The application follows a standard Angular architecture with the following key c
 - Use angular material components where possible
 - Use angular material color variables
 - use @for and @if, and not *ngIf and *ngFor
-- use css classes like "d-flex flex-col p-8 ..." instead of custom classes
+- use css classes like "d-flex flex-col p-8 ..." defined via @styles/helpers instead of custom classes
 - do not modify objects inside dto folder

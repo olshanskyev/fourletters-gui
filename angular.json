@@ -92,8 +92,8 @@
           },
           "defaultConfiguration": "development",
           "options": {
-            "ssl": true,
-            "port": 443
+            "ssl": false,
+            "port": 4200
           }
         },
         "test": {

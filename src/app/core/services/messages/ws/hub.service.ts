@@ -14,6 +14,10 @@ export class HubService implements OnDestroy {
   private authService = inject(AuthService);
   private socket$?: WebSocketSubject<HubEvent>;
 
+  private reconnectDelay = 5000;
+  private reconnectTimeoutId?: any;
+  private isIntentionallyDisconnected = false;
+
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
   private readonly messageReadSubject = new Subject<ReceiptData>();
@@ -22,6 +26,12 @@ export class HubService implements OnDestroy {
   public connect(): void {
     if (this.socket$ && !this.socket$.closed) {
       return;
+    }
+
+    this.isIntentionallyDisconnected = false;
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = undefined;
     }
 
     const token = this.authService.tokenReader.getAccessToken();
@@ -54,9 +64,31 @@ export class HubService implements OnDestroy {
           }
         }
       },
-      error: (err) => console.error('Hub WebSocket error:', err),
-      complete: () => console.warn('Hub WebSocket connection closed')
+      error: (err) => {
+        console.error('Hub WebSocket error:', err);
+        this.scheduleReconnect();
+      },
+      complete: () => {
+        console.warn('Hub WebSocket connection closed');
+        this.scheduleReconnect();
+      }
     });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.isIntentionallyDisconnected) {
+      return;
+    }
+    
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+    }
+    
+    this.socket$ = undefined;
+    
+    this.reconnectTimeoutId = setTimeout(() => {
+      this.connect();
+    }, this.reconnectDelay);
   }
 
   public get messages(): Observable<EncryptedMessage> {
@@ -77,6 +109,11 @@ export class HubService implements OnDestroy {
 
 
   public disconnect(): void {
+    this.isIntentionallyDisconnected = true;
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = undefined;
+    }
     if (this.socket$) {
       this.socket$.complete();
       this.socket$ = undefined;

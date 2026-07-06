@@ -138,7 +138,7 @@ export class GroupsService {
       name: group.name,
       ownerId: group.ownerId,
       members: group.members.map(m => m.userId),
-      updatedAt: group.updatedAt ?? Date.now()
+      updatedAt: Date.now()
     };
   }
 
