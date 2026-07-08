@@ -4,7 +4,7 @@ import {
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection,
+  provideZonelessChangeDetection, isDevMode,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideTranslateService } from '@ngx-translate/core';
@@ -16,6 +16,7 @@ import { NgxPermissionsModule } from 'ngx-permissions';
 import { environment } from '../environments/environment';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { progressInterceptor, provideNgProgressHttp } from 'ngx-progressbar/http';
+import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -33,6 +34,9 @@ export const appConfig: ApplicationConfig = {
     }),
     importProvidersFrom(
       NgxPermissionsModule.forRoot(),
-    )
+    ),  provideServiceWorker('ngsw-worker.js', {
+            enabled: !isDevMode(),
+            registrationStrategy: 'registerWhenStable:30000'
+        })
   ],
 };
