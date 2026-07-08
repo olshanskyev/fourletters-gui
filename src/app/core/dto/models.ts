@@ -22,6 +22,8 @@ export * from './preKeysUploadRequest';
 export * from './publicKeySet';
 export * from './publicKeysBatchResponse';
 export * from './publicUser';
+export * from './pushSubscription';
+export * from './pushSubscriptionKeys';
 export * from './receiptData';
 export * from './receiptEvent';
 export * from './receiptType';

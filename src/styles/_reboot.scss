@@ -2,6 +2,7 @@
   --body-font-family: 'Roboto', 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial,
     'Lucida Grande', sans-serif;
   --body-background-color: var(--mat-sys-surface-container);
+  --system-nav-bar-color: var(--mat-sys-background);
 }
 
 *,
@@ -16,6 +17,21 @@ body {
   min-height: 100%;
   overscroll-behavior-x: none;
   background-color: var(--body-background-color);
+}
+
+// Paint a clearly-light band behind the OS navigation area (safe-area inset) so
+// Android's auto-contrast picks dark, visible nav buttons without altering the
+// visible app content above it.
+body::after {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  height: env(safe-area-inset-bottom, 0);
+  pointer-events: none;
+  content: '';
+  background-color: var(--system-nav-bar-color);
 }
 
 body {

@@ -5,7 +5,6 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
-  isDevMode,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideTranslateService } from '@ngx-translate/core';
@@ -35,7 +34,7 @@ export const appConfig: ApplicationConfig = {
     }),
     importProvidersFrom(NgxPermissionsModule.forRoot()),
     provideServiceWorker('ngsw-worker.js', {
-      enabled: !isDevMode(),
+      enabled: environment.enableServiceWorker,
       registrationStrategy: 'registerWhenStable:30000',
     }),
   ],

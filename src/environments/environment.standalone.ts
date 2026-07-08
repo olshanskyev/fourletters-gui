@@ -11,5 +11,7 @@ export const environment = {
   googleClientId: '74177348869-n3k7043tjn1blpaluf67elnsb9ilmtr7.apps.googleusercontent.com',
   redirectUrl: 'https://localhost',
   standalone: true,
-  umamiWebsiteId: ''
+  umamiWebsiteId: '',
+  vapidPublicKey: '',
+  enableServiceWorker: false
 };

@@ -8,6 +8,7 @@ import { UserResponse } from '@core/dto/userResponse';
 import { MessagesService } from '@core/services/messages/messages.service';
 import { GroupsService } from '@core/services/groups/groups.service';
 import { IdentityService } from '@core/services/identity/identity.service';
+import { PushService } from '@core/services/push/push.service';
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +19,7 @@ export class StartupService {
   private readonly messagesService = inject(MessagesService);
   private readonly groupsService = inject(GroupsService);
   private readonly identityService = inject(IdentityService);
+  private readonly pushService = inject(PushService);
   private readonly destroyRef = inject(DestroyRef);
 
   private currentUser$!: Observable<UserResponse | undefined>;
@@ -58,6 +60,8 @@ export class StartupService {
                     }
                     // Roster sync is non-critical and independent of crypto/messaging
                     this.groupsService.syncGroups().catch(e => console.error('Failed to sync groups', e));
+                    // Web Push registration is best-effort and must not block startup
+                    this.pushService.enable().catch(e => console.error('Failed to enable push notifications', e));
                   } else {
                     this.messagesService.stopListening();
                   }

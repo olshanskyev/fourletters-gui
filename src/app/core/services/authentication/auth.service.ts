@@ -17,6 +17,7 @@ import { SettingsService } from '@core/services/shared';
 import { AppDatabase } from '@core/services/database/app.database';
 import { RegistryDatabase } from '@core/services/database/registry.database';
 import { IdentityService } from '@core/services/identity/identity.service';
+import { PushService } from '@core/services/push/push.service';
 import { RefreshErrorReasonEnum } from '@dto/models';
 
 @Injectable({
@@ -35,6 +36,7 @@ export class AuthService {
   private readonly vkService = inject(VKAuthService);
   private readonly googleService = inject(GoogleAuthService);
   private readonly identityService = inject(IdentityService);
+  private readonly pushService = inject(PushService);
 
   private readonly router = inject(Router);
   private refreshInFlight$: Observable<boolean> | null = null;
@@ -156,6 +158,9 @@ export class AuthService {
   }
 
   logout() {
+    // Remove the push subscription while the auth token is still valid.
+    this.pushService.disable().catch(() => undefined);
+
     const source = this.httpClient.post<any>('/auth/logout',
       {},
       {withCredentials: true}
