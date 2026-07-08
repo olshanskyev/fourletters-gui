@@ -1,4 +1,4 @@
-import { Component, effect, inject, input, signal } from '@angular/core';
+import { Component, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatLayoutComponent } from '@layouts/chat-layout/chat-layout.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -25,6 +25,7 @@ import { ConversationsService } from '@core/services/conversations/conversations
   standalone: true,
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
     CommonModule,
@@ -36,8 +37,8 @@ import { ConversationsService } from '@core/services/conversations/conversations
     MatIconModule,
     RouterLink,
     ObserveVisibilityDirective,
-    DecryptMessagePipe
-  ]
+    DecryptMessagePipe,
+  ],
 })
 export class ChatComponent {
   sidePanelService = inject(SidePanelService);
@@ -49,21 +50,21 @@ export class ChatComponent {
   locale = this.settingsService.locale;
   messages = toSignal(
     toObservable(this.conversationId).pipe(
-      switchMap(id => {
+      switchMap((id) => {
         if (id) {
           return this.messagesService.observeMessages(id);
         }
         return of([]);
-      })
+      }),
     ),
-    { initialValue: [] }
+    { initialValue: [] },
   );
 
   // Live conversation header metadata (title, avatar). Re-emits when the conversation or its cached
   // profile/group metadata changes
   conversation = rxResource({
     params: () => this.conversationId(),
-    stream: ({ params: id }) => this.conversationsService.observeConversationView(id)
+    stream: ({ params: id }) => this.conversationsService.observeConversationView(id),
   });
 
   messageText = signal<string>('');

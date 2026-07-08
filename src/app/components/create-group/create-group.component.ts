@@ -1,4 +1,10 @@
-import { Component, inject, resource, input, model, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  resource,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { UsersService } from '@core/services/users/users.service';
 import { MasterViewService } from '@core/services/shared/master-view.service';
@@ -14,17 +20,10 @@ import { ConversationsService } from '@core/services/conversations/conversations
   standalone: true,
   templateUrl: './create-group.component.html',
   styleUrls: ['./create-group.component.scss'],
-  imports: [
-    CommonModule,
-    ContactsComponent,
-    GroupInfoComponent,
-    MatButtonModule,
-    MatIconModule
-  ]
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CommonModule, ContactsComponent, GroupInfoComponent, MatButtonModule, MatIconModule],
 })
 export class CreateGroupComponent {
-
-
   // Model containing the IDs of the selected contacts
   invitedUsers = signal<string[]>([]);
   groupName = signal<string>('');
@@ -36,7 +35,7 @@ export class CreateGroupComponent {
   private readonly conversationsService = inject(ConversationsService);
 
   contacts = resource({
-    loader: () => this.usersService.getContactList()
+    loader: () => this.usersService.getContactList(),
   });
 
   goBack() {
@@ -52,6 +51,4 @@ export class CreateGroupComponent {
     await this.conversationsService.ensureGroupConversation(group.id);
     this.masterViewService.setView('conversations');
   }
-
-
 }

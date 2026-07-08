@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -14,9 +14,18 @@ import { InviteDialogComponent } from '../dialogs/invite-dialog/invite-dialog.co
 @Component({
   selector: 'app-user-button',
   template: `
-    <button matIconButton [matMenuTriggerFor]="menu" class="d-flex align-items-center justify-content-center">
+    <button
+      matIconButton
+      [matMenuTriggerFor]="menu"
+      class="d-flex align-items-center justify-content-center"
+    >
       @if (user()?.avatarUrl) {
-        <img [src]="user()?.avatarUrl" class="avatar -small" alt="avatar" referrerpolicy="no-referrer" />
+        <img
+          [src]="user()!.avatarUrl"
+          class="avatar -small"
+          alt="avatar"
+          referrerpolicy="no-referrer"
+        />
       } @else {
         <div class="avatar -small default-avatar"></div>
       }
@@ -27,7 +36,7 @@ import { InviteDialogComponent } from '../dialogs/invite-dialog/invite-dialog.co
         <button mat-menu-item disabled>
           <span>{{ user()?.username }}</span>
         </button>
-        <mat-divider/>
+        <mat-divider />
       }
       <button mat-menu-item (click)="openContacts()">
         <mat-icon>person</mat-icon>
@@ -43,10 +52,16 @@ import { InviteDialogComponent } from '../dialogs/invite-dialog/invite-dialog.co
       </button>
     </mat-menu>
   `,
-  styles: `
-  `,
-  imports: [MatButtonModule, MatIconModule,
-    MatMenuModule, TranslateModule, MatDividerModule, MatDialogModule],
+  styles: ``,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    TranslateModule,
+    MatDividerModule,
+    MatDialogModule,
+  ],
 })
 export class UserButton {
   private readonly auth = inject(AuthService);
@@ -62,7 +77,7 @@ export class UserButton {
 
   openInviteDialog() {
     this.dialog.open(InviteDialogComponent, {
-      panelClass: 'invite-dialog'
+      panelClass: 'invite-dialog',
     });
   }
 

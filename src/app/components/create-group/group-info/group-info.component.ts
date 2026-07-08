@@ -1,6 +1,13 @@
-import { Component, inject, resource, input, model, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  resource,
+  input,
+  model,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
-
 
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -15,6 +22,7 @@ import { TextFieldModule } from '@angular/cdk/text-field';
   standalone: true,
   templateUrl: './group-info.component.html',
   styleUrls: ['./group-info.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
     CommonModule,
@@ -22,11 +30,10 @@ import { TextFieldModule } from '@angular/cdk/text-field';
     MatIconModule,
     MatInputModule,
     ListLayoutComponent,
-    TextFieldModule
-  ]
+    TextFieldModule,
+  ],
 })
 export class GroupInfoComponent {
-
   groupName = model<string>('');
 
   private masterViewService = inject(MasterViewService);

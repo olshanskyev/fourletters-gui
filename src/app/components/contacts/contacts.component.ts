@@ -1,4 +1,4 @@
-import { Component, inject, resource, input, model } from '@angular/core';
+import { Component, inject, resource, input, model, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,14 +17,15 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
   standalone: true,
   templateUrl: './contacts.component.html',
   styleUrls: ['./contacts.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     ListLayoutComponent,
     MatButtonModule,
     MatIconModule,
     MatCheckboxModule,
-    MatDialogModule
-  ]
+    MatDialogModule,
+  ],
 })
 export class ContactsComponent {
   // Enables multi-select checkbox mode
@@ -40,7 +41,7 @@ export class ContactsComponent {
   private masterViewService = inject(MasterViewService);
   private router = inject(Router);
   contacts = resource({
-    loader: () => this.usersService.getContactList()
+    loader: () => this.usersService.getContactList(),
   });
 
   goBack() {
@@ -48,10 +49,10 @@ export class ContactsComponent {
   }
 
   openInviteDialog() {
-      this.dialog.open(InviteDialogComponent, {
-        panelClass: 'invite-dialog'
-      });
-    }
+    this.dialog.open(InviteDialogComponent, {
+      panelClass: 'invite-dialog',
+    });
+  }
 
   async handleContactClick(userId: string) {
     if (this.selectionMode()) {
@@ -64,7 +65,7 @@ export class ContactsComponent {
   toggleSelection(userId: string) {
     const current = this.selectedContacts();
     if (current.includes(userId)) {
-      this.selectedContacts.set(current.filter(id => id !== userId));
+      this.selectedContacts.set(current.filter((id) => id !== userId));
     } else {
       this.selectedContacts.set([...current, userId]);
     }

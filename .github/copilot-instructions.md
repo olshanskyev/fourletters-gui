@@ -7,7 +7,7 @@ This document provides context for the `fourletters-gui` project, an Angular-bas
 ## Project Overview
 
 Key technologies used in this project include:
-- **Angular 20+**: The core framework for the application.
+- **Angular 22**: The core framework for the application.
 - **Angular Material**: For UI components.
 - **Vitest**: For running unit tests.
 - **ESLint** and **Prettier**: For code linting and formatting.

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule } from '@angular/material/dialog';
@@ -20,7 +20,7 @@ import { AuthService } from '@core/services/authentication/auth.service';
     MatInputModule,
     MatFormFieldModule,
     ClipboardModule,
-    TranslateModule
+    TranslateModule,
   ],
   template: `
     <h2 mat-dialog-title>Invite friends</h2>
@@ -30,11 +30,7 @@ import { AuthService } from '@core/services/authentication/auth.service';
       <mat-form-field appearance="outline" class="w-full mt-2">
         <mat-label>Invitation Link</mat-label>
         <input matInput [value]="inviteLink" readonly #linkInput />
-        <button
-          mat-icon-button
-          matSuffix
-          [cdkCopyToClipboard]="inviteLink"
-          matTooltip="Copy link">
+        <button mat-icon-button matSuffix [cdkCopyToClipboard]="inviteLink" matTooltip="Copy link">
           <mat-icon>content_copy</mat-icon>
         </button>
       </mat-form-field>
@@ -43,8 +39,8 @@ import { AuthService } from '@core/services/authentication/auth.service';
       <button mat-button mat-dialog-close>Close</button>
     </mat-dialog-actions>
   `,
-  styles: `
-  `
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: ``,
 })
 export class InviteDialogComponent {
   private readonly authService = inject(AuthService);

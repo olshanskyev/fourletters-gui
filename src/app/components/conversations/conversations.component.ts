@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,6 +18,7 @@ import { MasterViewService } from '@core/services/shared/master-view.service';
   standalone: true,
   templateUrl: './conversations.component.html',
   styleUrls: ['./conversations.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     RouterModule,
@@ -28,18 +29,19 @@ import { MasterViewService } from '@core/services/shared/master-view.service';
     MatIconModule,
     UserButton,
     MatMenuModule,
-    MatDividerModule
-  ]
+    MatDividerModule,
+  ],
 })
 export class ConversationsComponent {
   private conversationsService = inject(ConversationsService);
   private masterViewService = inject(MasterViewService);
 
   // Automatically streams and sorts conversations from IndexedDB
-  conversations = toSignal(this.conversationsService.observeConversationViews(),
-  { initialValue: [] });
+  conversations = toSignal(this.conversationsService.observeConversationViews(), {
+    initialValue: [],
+  });
 
-  newGroup () {
+  newGroup() {
     this.masterViewService.setView('create-group');
   }
 

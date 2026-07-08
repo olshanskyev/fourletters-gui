@@ -1,4 +1,13 @@
-import { Component, computed, effect, inject, signal, viewChild, OnDestroy } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+  OnDestroy,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { NgComponentOutlet } from '@angular/common';
 import { BreakpointObserver } from '@angular/cdk/layout';
@@ -14,11 +23,8 @@ const MONITOR_MEDIAQUERY = 'screen and (min-width: 1280px)';
   templateUrl: './main-layout.component.html',
   styleUrls: ['./main-layout.component.scss'],
   standalone: true,
-  imports: [
-    RouterOutlet,
-    MatSidenavModule,
-    NgComponentOutlet
-  ]
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterOutlet, MatSidenavModule, NgComponentOutlet],
 })
 export class MainLayoutComponent implements OnDestroy {
   readonly sidenav = viewChild.required<MatSidenav>('sidenav');
@@ -35,7 +41,7 @@ export class MainLayoutComponent implements OnDestroy {
   constructor() {
     this.layoutChangesSub = this.breakpointObserver
       .observe([MOBILE_MEDIAQUERY, MONITOR_MEDIAQUERY])
-      .subscribe(state => {
+      .subscribe((state) => {
         if (state.breakpoints[MOBILE_MEDIAQUERY]) {
           this.isMobileScreen.set(true);
         } else {

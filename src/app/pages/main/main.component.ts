@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject } from '@angular/core';
+import { Component, Input, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { SplitLayoutComponent } from '@layouts/split-layout/split-layout.component';
@@ -15,6 +15,7 @@ import { CreateGroupComponent } from '@components/create-group/create-group.comp
   standalone: true,
   templateUrl: './main.component.html',
   styleUrls: ['./main.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     RouterModule,
@@ -22,8 +23,8 @@ import { CreateGroupComponent } from '@components/create-group/create-group.comp
     ChatComponent,
     ConversationsComponent,
     ContactsComponent,
-    CreateGroupComponent
-]
+    CreateGroupComponent,
+  ],
 })
 export class MainComponent implements OnInit {
   @Input() id?: string; // Captures :id from the route
@@ -40,8 +41,9 @@ export class MainComponent implements OnInit {
       // Prevent opening a chat with oneself if necessary (or just let the service handle it)
       if (currentUser?.id !== this.inviteTargetId) {
         try {
-          const conversationId = await this.conversationsService
-            .ensureDirectConversation(this.inviteTargetId);
+          const conversationId = await this.conversationsService.ensureDirectConversation(
+            this.inviteTargetId,
+          );
           // Redirect to the regular chat route
           this.router.navigate(['/m', conversationId], { replaceUrl: true });
         } catch (e) {

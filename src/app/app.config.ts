@@ -4,7 +4,8 @@ import {
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection, isDevMode,
+  provideZonelessChangeDetection,
+  isDevMode,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideTranslateService } from '@ngx-translate/core';
@@ -14,7 +15,7 @@ import { routes } from './app.routes';
 import { BASE_URL_SERVER, StartupService, TranslateLangService, interceptors } from './core';
 import { NgxPermissionsModule } from 'ngx-permissions';
 import { environment } from '../environments/environment';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { progressInterceptor, provideNgProgressHttp } from 'ngx-progressbar/http';
 import { provideServiceWorker } from '@angular/service-worker';
 
@@ -27,16 +28,15 @@ export const appConfig: ApplicationConfig = {
     provideHotToastConfig(),
     provideAppInitializer(() => inject(TranslateLangService).load()),
     provideAppInitializer(() => inject(StartupService).load()),
-    provideHttpClient(withInterceptors([progressInterceptor, ...interceptors])),
+    provideHttpClient(withXhr(), withInterceptors([progressInterceptor, ...interceptors])),
     provideNgProgressHttp({}),
     provideTranslateService({
       loader: provideTranslateHttpLoader({ prefix: 'i18n/', suffix: '.json' }),
     }),
-    importProvidersFrom(
-      NgxPermissionsModule.forRoot(),
-    ),  provideServiceWorker('ngsw-worker.js', {
-            enabled: !isDevMode(),
-            registrationStrategy: 'registerWhenStable:30000'
-        })
+    importProvidersFrom(NgxPermissionsModule.forRoot()),
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
   ],
 };

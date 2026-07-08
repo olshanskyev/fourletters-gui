@@ -11,7 +11,12 @@
           <button matButton (click)="openChatDetails()" class="p-l-4">
             <span class="d-flex align-items-center gap-8">
               @if (conversation.value()?.avatarUrl) {
-                <img [src]="conversation.value()?.avatarUrl" class="avatar -small" alt="avatar" referrerpolicy="no-referrer" />
+                <img
+                  [src]="conversation.value()!.avatarUrl"
+                  class="avatar -small"
+                  alt="avatar"
+                  referrerpolicy="no-referrer"
+                />
               } @else {
                 <div class="avatar -small default-avatar"></div>
               }
@@ -19,7 +24,6 @@
                 {{ conversation.value()?.title ?? 'Chat' }}
               </span>
             </span>
-
           </button>
         </div>
         <div>
@@ -31,73 +35,78 @@
     </div>
   }
 
-    <div body class="h-full">
-      @if (!conversationId()) {
-        <div class="notification-container">
-          <p>Select a conversation to start messaging</p>
-        </div>
-      } @else {
-        @if (messages().length > 0) {
-          <div class="d-flex flex-col justify-content-end gap-8 p-b-4 h-full">
-            @for (msg of messages(); track msg.id) {
-              <div
-                class="message-bubble"
-                [appObserveVisibility]="!msg.isMine && msg.status !== 'read'"
-                (visible)="onMessageVisible(msg)"
-                [class]="{'mine': msg.isMine, 'theirs': !msg.isMine}">
-                <div>
-                  {{ msg | decryptMessage | async }}
-                </div>
-                <div class="bubble-footer">
-                  <div></div>
-                  <div class="message-status">
-                    <span class="opacity-60">{{ msg.createdAt | date:'shortTime':'':locale() }}</span>
-                    @if (msg.isMine) {
-                       <mat-icon class="m-l-2"
-                       [class]="msg.status === 'read'? 'opacity-80' : 'opacity-60'"
-                       >
-                         @if (msg.status === 'pending') {
-                           schedule
-                         } @else if (msg.status === 'accepted') {
-                           check
-                         } @else if (msg.status === 'delivered') {
-                           done_all
-                         } @else if (msg.status === 'read') {
-                           done_all
-                         } @else {
-                           help_outline
-                         }
-                        </mat-icon>
-                    }
-                  </div>
+  <div body class="h-full">
+    @if (!conversationId()) {
+      <div class="notification-container">
+        <p>Select a conversation to start messaging</p>
+      </div>
+    } @else {
+      @if (messages().length > 0) {
+        <div class="d-flex flex-col justify-content-end gap-8 p-b-4 h-full">
+          @for (msg of messages(); track msg.id) {
+            <div
+              class="message-bubble"
+              [appObserveVisibility]="!msg.isMine && msg.status !== 'read'"
+              (visible)="onMessageVisible(msg)"
+              [class]="{ mine: msg.isMine, theirs: !msg.isMine }"
+            >
+              <div>
+                {{ msg | decryptMessage | async }}
+              </div>
+              <div class="bubble-footer">
+                <div></div>
+                <div class="message-status">
+                  <span class="opacity-60">{{
+                    msg.createdAt | date: 'shortTime' : '' : locale()
+                  }}</span>
+                  @if (msg.isMine) {
+                    <mat-icon
+                      class="m-l-2"
+                      [class]="msg.status === 'read' ? 'opacity-80' : 'opacity-60'"
+                    >
+                      @if (msg.status === 'pending') {
+                        schedule
+                      } @else if (msg.status === 'accepted') {
+                        check
+                      } @else if (msg.status === 'delivered') {
+                        done_all
+                      } @else if (msg.status === 'read') {
+                        done_all
+                      } @else {
+                        help_outline
+                      }
+                    </mat-icon>
+                  }
                 </div>
               </div>
-            }
-          </div>
-        } @else {
-          <div class="notification-container">
-            <p>No messages yet</p>
-          </div>
-        }
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="notification-container">
+          <p>No messages yet</p>
+        </div>
       }
-    </div>
-
-    @if (conversationId()) {
-      <div bottom class="m-b-8">
-        <mat-form-field class="w-full message-input" appearance="outline" subscriptSizing="dynamic">
-            <textarea matInput
-              rows="1"
-              cdkTextareaAutosize
-              cdkAutosizeMaxRows="5"
-              placeholder="Message"
-              [(ngModel)]="messageText"
-              (keydown.enter)="$event.preventDefault(); sendMessage()"
-            ></textarea>
-
-            <button matSuffix matIconButton class="m-r-4" (click)="sendMessage()">
-              <mat-icon>send</mat-icon>
-          </button>
-        </mat-form-field>
-      </div>
     }
+  </div>
+
+  @if (conversationId()) {
+    <div bottom class="m-b-8">
+      <mat-form-field class="w-full message-input" appearance="outline" subscriptSizing="dynamic">
+        <textarea
+          matInput
+          rows="1"
+          cdkTextareaAutosize
+          cdkAutosizeMaxRows="5"
+          placeholder="Message"
+          [(ngModel)]="messageText"
+          (keydown.enter)="$event.preventDefault(); sendMessage()"
+        ></textarea>
+
+        <button matSuffix matIconButton class="m-r-4" (click)="sendMessage()">
+          <mat-icon>send</mat-icon>
+        </button>
+      </mat-form-field>
+    </div>
+  }
 </app-chat-layout>

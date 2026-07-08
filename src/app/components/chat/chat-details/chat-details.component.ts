@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ProfileLayoutComponent } from '@layouts/profile-layout/profile-layout.component';
 import { SidePanelService } from '@core/services/shared/side-panel.service';
@@ -10,7 +10,8 @@ import { MatIconModule } from '@angular/material/icon';
   standalone: true,
   templateUrl: './chat-details.component.html',
   styleUrls: ['./chat-details.component.scss'],
-  imports: [CommonModule, ProfileLayoutComponent, MatButtonModule, MatIconModule]
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CommonModule, ProfileLayoutComponent, MatButtonModule, MatIconModule],
 })
 export class ChatDetailsComponent {
   sidePanelService = inject(SidePanelService);
