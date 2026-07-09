@@ -9,6 +9,20 @@
     </div>
 
     <div body class="p-y-4 p-x-4">
+      @if (showNotificationsBanner()) {
+        <div class="notifications-banner d-flex align-items-center p-12 m-b-8">
+          <mat-icon class="m-r-12">notifications_active</mat-icon>
+          <div class="d-flex flex-col min-w-0 flex-1">
+            <span class="f-w-600">Enable notifications</span>
+            <span class="f-s-14">Get notified about new messages.</span>
+          </div>
+          <button mat-button  (click)="enableNotifications()">Enable</button>
+          <button mat-icon-button aria-label="Dismiss" (click)="dismissNotificationsBanner()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+
       @for (chat of conversations(); track chat.id) {
         <div class="d-flex align-items-center p-16 conversation-item" [routerLink]="['/m', chat.id]" routerLinkActive="active-chat">
            @if (chat.avatarUrl) {

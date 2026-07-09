@@ -32,15 +32,10 @@ export class IdentityService {
     }
 
     if (!(await this.signal.hasLocalIdentity())) {
-      const bundle = await this.signal.createIdentityBundle();
-      try {
-        await lastValueFrom(this.keysApi.uploadKeys(bundle));
-      } catch (err) {
-        console.error('Failed to upload Signal pre-key bundle:', err);
-        // Roll back so the next login regenerates and retries (avoids a half-registered device).
-        await this.signal.wipe();
-        throw err;
-      }
+      // Generate in memory, upload, and only persist locally on a 200
+      const { upload, commit } = await this.signal.createIdentityBundle();
+      await lastValueFrom(this.keysApi.uploadKeys(upload));
+      await commit();
     }
   }
 

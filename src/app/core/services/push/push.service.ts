@@ -1,4 +1,4 @@
-import { Injectable, inject, DestroyRef } from '@angular/core';
+import { Injectable, inject, DestroyRef, signal, computed } from '@angular/core';
 import { SwPush } from '@angular/service-worker';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -7,6 +7,7 @@ import { catchError, of } from 'rxjs';
 
 import { environment } from '@env/environment';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
+import { SettingsService } from '@core/services/shared/settings.service';
 import { PushSubscription as PushSubscriptionDto } from '@dto/models';
 
 interface PushNotificationData {
@@ -28,7 +29,23 @@ export class PushService {
   private readonly httpClient = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly conversations = inject(ConversationsService);
+  private readonly settings = inject(SettingsService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Current OS notification permission, kept in a signal so the UI can react. */
+  private readonly permission = signal<NotificationPermission>(this.currentPermission());
+  private readonly bannerDismissed = signal<boolean>(!!this.settings.options().pushBannerDismissed);
+
+  /**
+   * Whether to show the in-app "Enable notifications" banner
+   */
+  readonly showEnableBanner = computed(
+    () =>
+      this.swPush.isEnabled &&
+      !!environment.vapidPublicKey &&
+      this.permission() === 'default' &&
+      !this.bannerDismissed()
+  );
 
   constructor() {
     if (this.swPush.isEnabled) {
@@ -39,23 +56,50 @@ export class PushService {
   }
 
   /**
-   * Ask for notification permission (if not yet decided) and register the push subscription with
-   * the server. Idempotent: safe to call on every login. No-op when the service worker is disabled
-   * (dev builds) or no VAPID public key is configured.
+   * Called once per login. Silently re-registers when permission is already granted.
+   */
+  async initOnLogin(): Promise<void> {
+    if (!this.swPush.isEnabled || !environment.vapidPublicKey) return;
+
+    this.permission.set(this.currentPermission());
+    await this.resubscribeIfGranted();
+  }
+
+  /**
+   * Request notification permission (via a user gesture) and register the push subscription.
    */
   async enable(): Promise<void> {
-    if (!this.swPush.isEnabled) return;
-    if (!environment.vapidPublicKey) {
-      console.warn('Push disabled: no VAPID public key configured');
-      return;
-    }
-    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+    if (!this.swPush.isEnabled || !environment.vapidPublicKey) return;
+    if (this.currentPermission() === 'denied') {
+      this.permission.set('denied');
       return;
     }
 
+    await this.subscribe();
+    this.permission.set(this.currentPermission());
+  }
+
+  /** Re-register the subscription without prompting; only meaningful when already granted. */
+  async resubscribeIfGranted(): Promise<void> {
+    if (!this.swPush.isEnabled || this.currentPermission() !== 'granted') return;
+    await this.subscribe();
+  }
+
+  /** Hide the enable-notifications banner (persisted); re-enabling is then done via OS settings. */
+  dismissBanner(): void {
+    this.bannerDismissed.set(true);
+    this.settings.setOptions({ pushBannerDismissed: true });
+  }
+
+  private currentPermission(): NotificationPermission {
+    return typeof Notification !== 'undefined' ? Notification.permission : 'denied';
+  }
+
+  /** Request the browser subscription and forward it to the server. */
+  private async subscribe(): Promise<void> {
     try {
       const subscription = await this.swPush.requestSubscription({
-        serverPublicKey: environment.vapidPublicKey
+        serverPublicKey: environment.vapidPublicKey,
       });
       await this.sendSubscription(subscription);
     } catch (e) {

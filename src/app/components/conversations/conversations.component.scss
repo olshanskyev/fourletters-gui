@@ -25,3 +25,9 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+.notifications-banner {
+  border-radius: 0.5rem;
+  background-color: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}

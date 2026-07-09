@@ -12,6 +12,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 import { MasterViewService } from '@core/services/shared/master-view.service';
+import { PushService } from '@core/services/push/push.service';
 
 @Component({
   selector: 'app-conversations',
@@ -35,11 +36,23 @@ import { MasterViewService } from '@core/services/shared/master-view.service';
 export class ConversationsComponent {
   private conversationsService = inject(ConversationsService);
   private masterViewService = inject(MasterViewService);
+  private pushService = inject(PushService);
 
   // Automatically streams and sorts conversations from IndexedDB
   conversations = toSignal(this.conversationsService.observeConversationViews(), {
     initialValue: [],
   });
+
+  // Controls the "Enable notifications" banner shown when permission is still undecided.
+  showNotificationsBanner = this.pushService.showEnableBanner;
+
+  enableNotifications() {
+    this.pushService.enable();
+  }
+
+  dismissNotificationsBanner() {
+    this.pushService.dismissBanner();
+  }
 
   newGroup() {
     this.masterViewService.setView('create-group');

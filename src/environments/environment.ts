@@ -13,5 +13,5 @@ export const environment = {
   standalone: false,
   umamiWebsiteId: '',
   vapidPublicKey: 'BEbw8zeoHdTCqADASQIfEXT98el6h0rphh3UzBNJxOYFfkM0ccdK6VakpN6Ox-ygETx1J0nKuOcrdRZihnBK9lk',
-  enableServiceWorker: false
+  enableServiceWorker: true
 };

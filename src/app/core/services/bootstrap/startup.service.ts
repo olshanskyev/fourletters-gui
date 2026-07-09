@@ -61,7 +61,7 @@ export class StartupService {
                     // Roster sync is non-critical and independent of crypto/messaging
                     this.groupsService.syncGroups().catch(e => console.error('Failed to sync groups', e));
                     // Web Push registration is best-effort and must not block startup
-                    this.pushService.enable().catch(e => console.error('Failed to enable push notifications', e));
+                    this.pushService.initOnLogin().catch(e => console.error('Failed to enable push notifications', e));
                   } else {
                     this.messagesService.stopListening();
                   }

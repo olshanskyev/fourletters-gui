@@ -7,6 +7,7 @@ import { Injectable, inject } from '@angular/core';
 import SignalProtocol, {
   Curve,
   KeyHelper,
+  KeyPairType,
   SessionBuilder,
   SessionCipher,
   SignalProtocolAddress
@@ -41,23 +42,24 @@ export class SignalSessionService {
 
   /**
    * Generate this device's identity, registration id, signed pre-key and an initial pool of
-   * one-time pre-keys, persist them, and return the bundle to upload to the directory.
+   * one-time pre-keys entirely in memory, returning the bundle to upload plus a {@code commit}
+   * that persists them. Nothing touches local storage until {@code commit} runs, so a failed
+   * directory upload leaves this device with no half-registered identity (the next login retries).
    */
-  async createIdentityBundle(): Promise<KeysUploadRequest> {
+  async createIdentityBundle(): Promise<{ upload: KeysUploadRequest; commit: () => Promise<void> }> {
     return withSignalLock(this.appDb.userId, async () => {
       const registrationId = KeyHelper.generateRegistrationId();
       const identityKeyPair = await KeyHelper.generateIdentityKeyPair();
-      await this.store.putIdentityKeyPair(identityKeyPair);
-      await this.store.putRegistrationId(registrationId);
+      const signedPreKey = await KeyHelper.generateSignedPreKey(identityKeyPair, SIGNED_PREKEY_ID);
 
-      const signedPreKey = await KeyHelper.generateSignedPreKey(
-        identityKeyPair, SIGNED_PREKEY_ID
-      );
-      await this.store.storeSignedPreKey(SIGNED_PREKEY_ID, signedPreKey.keyPair);
+      // A fresh identity numbers its one-time pre-keys from 1.
+      const preKeys: { keyId: number; keyPair: KeyPairType }[] = [];
+      for (let keyId = 1; keyId <= INITIAL_PREKEY_COUNT; keyId++) {
+        const preKey = await KeyHelper.generatePreKey(keyId);
+        preKeys.push({ keyId, keyPair: preKey.keyPair });
+      }
 
-      const oneTimePreKeys = await this.generateAndStorePreKeys(INITIAL_PREKEY_COUNT);
-
-      return {
+      const upload: KeysUploadRequest = {
         registrationId,
         identityKey: Base64.bufferToBase64(identityKeyPair.pubKey),
         signedPreKey: {
@@ -65,8 +67,24 @@ export class SignalSessionService {
           publicKey: Base64.bufferToBase64(signedPreKey.keyPair.pubKey),
           signature: Base64.bufferToBase64(signedPreKey.signature)
         },
-        oneTimePreKeys
+        oneTimePreKeys: preKeys.map(p => ({
+          keyId: p.keyId,
+          publicKey: Base64.bufferToBase64(p.keyPair.pubKey)
+        }))
       };
+
+      const commit = () => withSignalLock(this.appDb.userId, async () => {
+        await this.store.putRegistrationId(registrationId);
+        await this.store.storeSignedPreKey(SIGNED_PREKEY_ID, signedPreKey.keyPair);
+        for (const p of preKeys) {
+          await this.store.storePreKey(p.keyId, p.keyPair);
+        }
+        // Advance the shared counter past ids 1..INITIAL_PREKEY_COUNT so later replenishments don't reissue them.
+        await this.store.takePreKeyIds(INITIAL_PREKEY_COUNT);
+        await this.store.putIdentityKeyPair(identityKeyPair);
+      });
+
+      return { upload, commit };
     });
   }
 
