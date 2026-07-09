@@ -2,7 +2,6 @@
   --body-font-family: 'Roboto', 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial,
     'Lucida Grande', sans-serif;
   --body-background-color: var(--mat-sys-surface-container);
-  --system-nav-bar-color: var(--mat-sys-background);
 }
 
 *,
@@ -14,24 +13,20 @@
 html,
 body {
   position: relative; // 1
-  min-height: 100%;
-  overscroll-behavior-x: none;
-  background-color: var(--body-background-color);
+  /* In a browser use the dynamic viewport so bottom content stays above the
+     URL/toolbar. In a standalone PWA (no toolbar) use the large viewport so the
+     background covers the iOS home-indicator safe-area zone with no bottom gap. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
-// Paint a clearly-light band behind the OS navigation area (safe-area inset) so
-// Android's auto-contrast picks dark, visible nav buttons without altering the
-// visible app content above it.
-body::after {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: -1;
-  height: env(safe-area-inset-bottom, 0);
-  pointer-events: none;
-  content: '';
-  background-color: var(--system-nav-bar-color);
+@media all and (display-mode: standalone) {
+  html,
+  body {
+    height: 100lvh;
+  }
 }
 
 body {
@@ -42,4 +37,9 @@ body {
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
+}
+
+app-root {
+  display: block;
+  height: 100%;
 }

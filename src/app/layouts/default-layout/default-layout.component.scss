@@ -1,6 +1,13 @@
-.full-size-container{
+:host {
+  display: block;
+  height: 100%;
+}
+
+.full-size-container {
   position: relative;
   display: flex;
   justify-content: center;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
+  overflow-y: auto;
 }

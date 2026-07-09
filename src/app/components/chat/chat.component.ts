@@ -1,4 +1,4 @@
-import { Component, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatLayoutComponent } from '@layouts/chat-layout/chat-layout.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -78,9 +78,9 @@ export class ChatComponent {
     const text = this.messageText();
     if (!convoId || !text) return;
 
+    this.messageText.set('');
     await this.messagesService.sendMessage(convoId, text);
 
-    this.messageText.set('');
   }
 
   onMessageVisible(msg: LocalMessage) {

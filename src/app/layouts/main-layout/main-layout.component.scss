@@ -2,8 +2,7 @@
 
 :host {
   display: block;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
 
   --bg-pattern: url('/backgrounds/space.svg');
   --mat-sidenav-container-divider-color: var(--mat-sys-outline-variant);
