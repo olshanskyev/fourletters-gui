@@ -9,9 +9,13 @@ app-chat-layout {
   --layout-max-width: 700px;
 }
 
+.transparent-background {
+  background-color: color-mix(in srgb, var(--mat-sys-background), transparent 5%);
+}
+
 .chat-header {
+  position: relative;
   height: 3rem;
-  background-color: var(--mat-sys-background);
   border-radius: var(--mat-sys-corner-full);
 }
 
