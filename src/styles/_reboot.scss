@@ -13,6 +13,7 @@
 html,
 body {
   position: relative; // 1
+
   /* In a browser use the dynamic viewport so bottom content stays above the
      URL/toolbar. In a standalone PWA (no toolbar) use the large viewport so the
      background covers the iOS home-indicator safe-area zone with no bottom gap. */

@@ -46,7 +46,8 @@ export class SignalSessionService {
    * that persists them. Nothing touches local storage until {@code commit} runs, so a failed
    * directory upload leaves this device with no half-registered identity (the next login retries).
    */
-  async createIdentityBundle(): Promise<{ upload: KeysUploadRequest; commit: () => Promise<void> }> {
+  async createIdentityBundle():
+    Promise<{ upload: KeysUploadRequest; commit: () => Promise<void> }> {
     return withSignalLock(this.appDb.userId, async () => {
       const registrationId = KeyHelper.generateRegistrationId();
       const identityKeyPair = await KeyHelper.generateIdentityKeyPair();
@@ -59,19 +60,13 @@ export class SignalSessionService {
         preKeys.push({ keyId, keyPair: preKey.keyPair });
       }
 
-      const upload: KeysUploadRequest = {
+      const upload = this.buildUploadRequest(
         registrationId,
-        identityKey: Base64.bufferToBase64(identityKeyPair.pubKey),
-        signedPreKey: {
-          keyId: SIGNED_PREKEY_ID,
-          publicKey: Base64.bufferToBase64(signedPreKey.keyPair.pubKey),
-          signature: Base64.bufferToBase64(signedPreKey.signature)
-        },
-        oneTimePreKeys: preKeys.map(p => ({
-          keyId: p.keyId,
-          publicKey: Base64.bufferToBase64(p.keyPair.pubKey)
-        }))
-      };
+        identityKeyPair.pubKey,
+        signedPreKey.keyPair.pubKey,
+        signedPreKey.signature,
+        preKeys.map(p => ({ keyId: p.keyId, publicKey: Base64.bufferToBase64(p.keyPair.pubKey) }))
+      );
 
       const commit = () => withSignalLock(this.appDb.userId, async () => {
         await this.store.putRegistrationId(registrationId);
@@ -91,6 +86,39 @@ export class SignalSessionService {
   /** Generate and store a fresh batch of one-time pre-keys (used to replenish the server pool). */
   generateMorePreKeys(count: number): Promise<OneTimePreKey[]> {
     return withSignalLock(this.appDb.userId, () => this.generateAndStorePreKeys(count));
+  }
+
+  /** This device's Base64 Curve25519 identity public key, or undefined if none has been generated yet. */
+  async localIdentityKey(): Promise<string | undefined> {
+    const keyPair = await this.store.getIdentityKeyPair();
+    return keyPair ? Base64.bufferToBase64(keyPair.pubKey) : undefined;
+  }
+
+  /**
+   * Re-publish this device's existing identity to the directory (reconcile after a stale/mismatched
+   * directory entry, e.g. a new-device login on a re-used account). Keeps the current identity and
+   * signed pre-key (re-signing the latter) so existing peer sessions stay valid, and mints a fresh
+   * one-time pre-key pool. Requires a local identity to already exist.
+   */
+  async buildReuploadBundle(): Promise<KeysUploadRequest> {
+    return withSignalLock(this.appDb.userId, async () => {
+      const identityKeyPair = await this.store.getIdentityKeyPair();
+      const registrationId = await this.store.getLocalRegistrationId();
+      const signedPreKeyPair = await this.store.loadSignedPreKey(SIGNED_PREKEY_ID);
+      if (!identityKeyPair || registrationId == null || !signedPreKeyPair) {
+        throw new Error('Cannot re-upload identity: local Signal identity is incomplete.');
+      }
+
+      const curve = await this.getCurve();
+      const signature = curve.calculateSignature(
+        identityKeyPair.privKey, signedPreKeyPair.pubKey
+      );
+      const oneTimePreKeys = await this.generateAndStorePreKeys(INITIAL_PREKEY_COUNT);
+
+      return this.buildUploadRequest(
+        registrationId, identityKeyPair.pubKey, signedPreKeyPair.pubKey, signature, oneTimePreKeys
+      );
+    });
   }
 
   /** Whether a ratchet session already exists for this peer (so we can skip a bundle fetch). */
@@ -178,6 +206,26 @@ export class SignalSessionService {
   }
 
   // --- internals -----------------------------------------------------------------------
+  /** Assemble the directory upload DTO from raw key material (shared by initial and reconcile paths). */
+  private buildUploadRequest(
+    registrationId: number,
+    identityPub: ArrayBuffer,
+    signedPreKeyPub: ArrayBuffer,
+    signedPreKeySignature: ArrayBuffer,
+    oneTimePreKeys: OneTimePreKey[]
+  ): KeysUploadRequest {
+    return {
+      registrationId,
+      identityKey: Base64.bufferToBase64(identityPub),
+      signedPreKey: {
+        keyId: SIGNED_PREKEY_ID,
+        publicKey: Base64.bufferToBase64(signedPreKeyPub),
+        signature: Base64.bufferToBase64(signedPreKeySignature)
+      },
+      oneTimePreKeys
+    };
+  }
+
   private async generateAndStorePreKeys(count: number): Promise<OneTimePreKey[]> {
     const ids = await this.store.takePreKeyIds(count);
     const dtos: OneTimePreKey[] = [];

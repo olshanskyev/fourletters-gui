@@ -54,7 +54,7 @@ export class StartupService {
                       await this.requestPersistentStorage();
                       await this.identityService.ensureIdentityKeys();
                       this.messagesService.startListening();
-                      await this.identityService.replenishPreKeysIfLow();
+                      await this.identityService.reconcileAndReplenishKeys();
                     } catch (e) {
                       console.error('Failed to initialize local crypto identity keys. Pausing message stream', e);
                     }

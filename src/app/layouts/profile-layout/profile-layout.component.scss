@@ -8,7 +8,6 @@
 .sticky-header {
   top: 0;
   z-index: 100;
-
   min-height: calc(var(--header-height) + env(safe-area-inset-top));
   padding-top: env(safe-area-inset-top);
   background-color: var(--mat-sys-background);

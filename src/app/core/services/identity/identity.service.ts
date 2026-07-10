@@ -40,19 +40,32 @@ export class IdentityService {
   }
 
   /**
-   * Top up the directory's one-time pre-key pool when it runs low, so peers can always open a
-   * session with us. Safe to call on every startup.
+   * Reconcile this device's identity with the directory and top up its one-time pre-key pool. The
+   * single count call also reports the directory's stored identity key: if it no longer matches this
+   * device (a new-device login on a re-used account, or a lost entry), re-publish our identity so
+   * peers can verify our receipts and open sessions with us. Otherwise replenish when the pool is
+   * low. Safe to call on every startup.
    */
-  async replenishPreKeysIfLow(): Promise<void> {
+  async reconcileAndReplenishKeys(): Promise<void> {
     try {
-      const { count } = await lastValueFrom(this.keysApi.countPreKeys());
+      const { count, identityKey: directoryIdentityKey } =
+        await lastValueFrom(this.keysApi.countPreKeys());
+      const localIdentityKey = await this.signal.localIdentityKey();
+
+      // Directory doesn't reflect this device: re-publish our identity (also refreshes the pool).
+      if (localIdentityKey && directoryIdentityKey !== localIdentityKey) {
+        const bundle = await this.signal.buildReuploadBundle();
+        await lastValueFrom(this.keysApi.uploadKeys(bundle));
+        return;
+      }
+
       if (count >= PREKEY_LOW_WATERMARK) {
         return;
       }
       const oneTimePreKeys = await this.signal.generateMorePreKeys(PREKEY_REPLENISH_BATCH);
       await lastValueFrom(this.keysApi.replenishPreKeys({ oneTimePreKeys }));
     } catch (err) {
-      console.error('Failed to replenish one-time pre-keys:', err);
+      console.error('Failed to reconcile/replenish one-time pre-keys:', err);
     }
   }
 

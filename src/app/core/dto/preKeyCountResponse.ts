@@ -10,12 +10,16 @@
 
 
 /**
- * How many one-time pre-keys the caller still has in the directory, so the client can top up below a threshold.
+ * How many one-time pre-keys the caller still has in the directory, so the client can top up below a threshold. Also carries the caller\'s currently published identity key so a re-used device can detect a stale directory entry and re-publish.
  */
 export interface PreKeyCountResponse { 
     /**
      * Remaining one-time pre-keys in the caller\'s pool.
      */
     count: number;
+    /**
+     * The caller\'s Curve25519 identity public key currently stored in the directory (Base64), or absent if the caller has no directory entry.
+     */
+    identityKey?: string;
 }
 

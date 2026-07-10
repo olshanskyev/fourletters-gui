@@ -102,7 +102,7 @@ export class OutboxService {
     const nackResent = msg.nackResent ?? new Set<string>();
     if (nackResent.has(targetId)) {
       // Already retried this recipient once under a fresh key and still undecryptable: give up.
-      await this.markFailed(msg);
+      if (msg.status !== 'delivered' && msg.status !== 'read') await this.markFailed(msg);
       return;
     }
 
