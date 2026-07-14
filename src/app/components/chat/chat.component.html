@@ -1,7 +1,6 @@
 <app-chat-layout>
   @if (conversationId()) {
-    <div header class="m-t-8">
-      <div class="chat-header d-flex justify-content-between align-items-center transparent-background">
+    <div header class="chat-header d-flex justify-content-between align-items-center transparent-background">
         <div class="gap-8 d-flex align-items-center">
           @if (showBackButton()) {
             <button matIconButton routerLink="/m">
@@ -31,7 +30,6 @@
             <mat-icon>more_vert</mat-icon>
           </button>
         </div>
-      </div>
     </div>
   }
 
@@ -91,7 +89,7 @@
   </div>
 
   @if (conversationId()) {
-    <div bottom class="m-b-8">
+    <div bottom class="chat-bottom">
       <mat-form-field class="w-full message-input transparent-background" appearance="outline" subscriptSizing="dynamic">
         <textarea
           matInput

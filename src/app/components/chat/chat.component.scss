@@ -3,6 +3,8 @@
 :host {
   display: block;
   height: 100%;
+
+  --vertical-padding: 0.75rem;
 }
 
 app-chat-layout {
@@ -16,7 +18,29 @@ app-chat-layout {
 .chat-header {
   position: relative;
   height: 3rem;
+  margin-top: var(--vertical-padding);
   border-radius: var(--mat-sys-corner-full);
+}
+
+.chat-bottom {
+  margin-bottom: var(--vertical-padding);
+}
+
+.chat-header::before,
+.chat-bottom::after {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  backdrop-filter: blur(1px);
+}
+
+.chat-header::before {
+  inset: calc(-1 * var(--vertical-padding)) 0 50%;
+}
+
+.chat-bottom::after {
+  inset: 50% 0 calc(-1 * var(--vertical-padding));
 }
 
 .message-bubble {

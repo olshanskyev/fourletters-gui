@@ -26,6 +26,7 @@
   /* Give enough padding so content isn't permanently hidden behind the absolute header/footer */
   padding-top: calc(var(--header-height) + env(safe-area-inset-top));
   padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  scrollbar-gutter: stable both-edges;
 }
 
 .layout-content-wrapper {
