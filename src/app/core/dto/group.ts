@@ -38,5 +38,9 @@ export interface Group {
      * Epoch milliseconds of the last roster change.
      */
     updatedAt?: number;
+    /**
+     * Server-authoritative Sender-Key epoch.
+     */
+    epoch?: number;
 }
 

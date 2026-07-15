@@ -9,6 +9,7 @@ import { OutboxService } from './outbox.service';
 import { ReceiptType, EncryptedMessage, ReceiptData } from '@dto/models';
 import { SyncStateRepository } from './sync-state.repository';
 import { SecureMessageService, UndecryptableError } from './secure-message.service';
+import { GroupUndecryptableError } from '@core/services/crypto/group';
 
 @Injectable({
   providedIn: 'root'
@@ -78,8 +79,13 @@ export class MessagesService {
           await this.syncState.setServerStartedAt(res.serverStartedAt);
         }
 
-        // Save unread messages from inbox
-        for (const encryptedMessage of res.messages || []) {
+        // Save unread messages from inbox. Process 1:1 messages (which include Sender Key
+        // Distribution Messages) BEFORE group messages, so a group message never fails to decrypt
+        // just because its Sender Key arrived in the same batch.
+        const inbox = res.messages || [];
+        const direct = inbox.filter(m => !(m as any).groupId);
+        const group = inbox.filter(m => (m as any).groupId);
+        for (const encryptedMessage of [...direct, ...group]) {
           await this.processIncomingMessage(encryptedMessage);
         }
 
@@ -125,34 +131,76 @@ export class MessagesService {
       return;
     }
 
-    const { senderId, messageId, payload } = encryptedMessage;
+    const { senderId, messageId, groupId } = encryptedMessage;
 
     try {
-      // 1. Decrypt through the sender's ratchet session (the ratchet authenticates the message). A
-      //    group message is just a 1:1 copy sealed to this device, carrying a groupId for threading.
-      const plaintext = await this.secureMsg.unpackIncomingPayload(senderId, payload);
-
-      // 2. Resolve the target conversation (direct or group), creating it if unknown
-      const conversationId = await this.resolveIncomingConversation(encryptedMessage);
-
-      // 3. Re-encrypt at-rest and persist locally
-      const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, plaintext);
-      await this.saveIncomingMessage(encryptedMessage, conversationId, ciphertextAtRest);
-
-      // 4. Refresh the conversation preview with the plaintext
-      await this.conversationsService.updateLastMessage(conversationId, plaintext, Date.now());
-
-      // 5. Confirm delivery to the original sender
-      await this.acknowledgeDelivery(messageId, senderId);
+      if (groupId) {
+        await this.processIncomingGroupMessage(encryptedMessage);
+      } else {
+        await this.processIncomingDirectMessage(encryptedMessage);
+      }
     } catch (err) {
-      if (err instanceof UndecryptableError) {
-        // Signature was valid but the payload was sealed to our previous device key. NACK it so
-        // the Server drops its copy and the sender re-keys and resends; discard it locally.
+      if (err instanceof UndecryptableError || err instanceof GroupUndecryptableError) {
+        // The signature was valid but we lack a usable key (sealed to a previous device key, or a
+        // Sender Key we never received). NACK it so the Server drops our pending copy and the sender
+        // re-keys / redistributes; discard it locally.
         await this.acknowledgeUndecryptable(messageId, senderId);
       } else {
         console.warn('Failed to process incoming message', messageId, err);
       }
     }
+  }
+
+  /**
+   * Handle a pairwise (1:1) message: either an ordinary chat or a Sender Key Distribution Message
+   * that silently seeds a peer's group Sender Key.
+   */
+  private async processIncomingDirectMessage(encryptedMessage: EncryptedMessage | any)
+    : Promise<void> {
+    const { senderId, messageId, payload } = encryptedMessage;
+    const content = await this.secureMsg.unpackIncomingPayload(senderId, payload);
+
+    if (content.kind === 'skdm') {
+      await this.secureMsg.applyDistribution(senderId, content.skdm);
+      await this.acknowledgeDelivery(messageId, senderId);
+      return;
+    }
+
+    if (content.kind === 'group-redelivery') {
+      // A group message re-encrypted over the 1:1 ratchet because we could not decrypt the group
+      // copy (new device). It rides in as a 1:1 message but belongs in the group conversation.
+      encryptedMessage.groupId = content.groupId;
+      encryptedMessage.recipientId = undefined;
+      await this.persistIncoming(encryptedMessage, content.text);
+      return;
+    }
+
+    await this.persistIncoming(encryptedMessage, content.text);
+  }
+
+  /**
+   * Handle a group message: decrypt it with the sender's distributed Sender Key. A missing/invalid
+   * Sender Key throws GroupUndecryptableError, which the caller turns into a NACK.
+   */
+  private async processIncomingGroupMessage(encryptedMessage: EncryptedMessage | any)
+    : Promise<void> {
+    const { senderId, groupId, payload } = encryptedMessage;
+    const plaintext = await this.secureMsg.unpackGroupPayload(senderId, groupId, payload);
+    await this.persistIncoming(encryptedMessage, plaintext);
+  }
+
+  /**
+   * Resolve the conversation, store the decrypted message at rest, refresh the preview, and
+   * acknowledge delivery to the original sender.
+   */
+  private async persistIncoming(encryptedMessage: EncryptedMessage | any, plaintext: string)
+    : Promise<void> {
+    const { senderId, messageId } = encryptedMessage;
+    const conversationId = await this.resolveIncomingConversation(encryptedMessage);
+    const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, plaintext);
+    await this.saveIncomingMessage(encryptedMessage, conversationId, ciphertextAtRest);
+    await this.conversationsService.updateLastMessage(conversationId, plaintext, Date.now());
+    await this.acknowledgeDelivery(messageId, senderId);
   }
 
   /**

@@ -4,6 +4,9 @@ import { StartupService } from './startup.service';
 import { AuthService } from '../authentication/auth.service';
 import { NgxRolesService } from 'ngx-permissions';
 import { MessagesService } from '@core/services/messages';
+import { GroupsService } from '@core/services/groups/groups.service';
+import { IdentityService } from '@core/services/identity/identity.service';
+import { PushService } from '@core/services/push/push.service';
 import { of } from 'rxjs';
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -14,6 +17,9 @@ describe('StartupService', () => {
   let authServiceMock: any;
   let rolesServiceMock: any;
   let messagesServiceMock: any;
+  let groupsServiceMock: any;
+  let identityServiceMock: any;
+  let pushServiceMock: any;
 
   beforeEach(() => {
     // Mock AuthService
@@ -42,12 +48,27 @@ describe('StartupService', () => {
       stopListening: vi.fn()
     };
 
+    // Mock collaborators pulled in by StartupService.load()
+    groupsServiceMock = {
+      syncGroups: vi.fn().mockResolvedValue(undefined)
+    };
+    identityServiceMock = {
+      ensureIdentityKeys: vi.fn().mockResolvedValue(undefined),
+      reconcileAndReplenishKeys: vi.fn().mockResolvedValue(undefined)
+    };
+    pushServiceMock = {
+      initOnLogin: vi.fn().mockResolvedValue(undefined)
+    };
+
     TestBed.configureTestingModule({
       providers: [
         StartupService,
         { provide: AuthService, useValue: authServiceMock },
         { provide: NgxRolesService, useValue: rolesServiceMock },
-        { provide: MessagesService, useValue: messagesServiceMock }
+        { provide: MessagesService, useValue: messagesServiceMock },
+        { provide: GroupsService, useValue: groupsServiceMock },
+        { provide: IdentityService, useValue: identityServiceMock },
+        { provide: PushService, useValue: pushServiceMock }
       ]
     });
 

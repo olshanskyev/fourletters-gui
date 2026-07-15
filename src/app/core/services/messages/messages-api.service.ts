@@ -37,6 +37,23 @@ export class MessagesApiService {
   }
 
   /**
+   * Submit a single group message. The Server reads the group roster and fans out one stored copy
+   * to every member, so no recipientId is sent.
+   */
+  sendGroupMessage(
+    groupId: string,
+    payload: string,
+    messageId: string = crypto.randomUUID()
+  ): Observable<AcceptedResponse> {
+    const message: EncryptedMessage = {
+      messageId,
+      payload,
+      groupId
+    };
+    return this.httpClient.post<AcceptedResponse>('/messages', message);
+  }
+
+  /**
    * Submit a batch of messages (resync)
    */
   sendMessagesBatch(messages: EncryptedMessage[]): Observable<MessageBatchResponse> {

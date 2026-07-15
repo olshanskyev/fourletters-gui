@@ -37,7 +37,32 @@ export interface GroupRecord {
   name: string;
   ownerId: string;
   members: string[]; // roster user ids
+  epoch?: number; // server-authoritative Sender-Key epoch (bumped on member removal)
   updatedAt: number; // epoch ms
+}
+
+/** This device's own Sender Key for a group epoch. */
+export interface GroupSenderKeyRecord {
+  id: string; // `${groupId}:${epoch}`
+  groupId: string;
+  epoch: number;
+  chainKey: ArrayBuffer; // 32 bytes; ratchets forward one message key at a time
+  iteration: number; // index of the next message this device will send
+  sigPubKey: ArrayBuffer; // per-group Curve25519 signature public key (shared in the SKDM)
+  sigPrivKey: ArrayBuffer; // signs every group message this device sends
+  distributedTo: string[]; // member ids that already received this Sender Key (lazy distribution)
+}
+
+/** A peer's Sender Key for a group epoch, learned from their Sender Key Distribution Message. */
+export interface GroupPeerKeyRecord {
+  id: string; // `${groupId}:${epoch}:${senderId}`
+  groupId: string;
+  epoch: number;
+  senderId: string;
+  chainKey: ArrayBuffer; // current chain key for this peer's stream
+  iteration: number; // index of the next message expected from this peer
+  sigPubKey: ArrayBuffer; // verifies this peer's group messages
+  skipped: Record<number, string>; // iteration -> Base64 message key, cached for out-of-order messages
 }
 
 export class UserDatabase extends Dexie {
@@ -46,6 +71,8 @@ export class UserDatabase extends Dexie {
   contacts!: Table<ContactRecord, string>;
   meta!: Table<MetaRecord, string>;
   groups!: Table<GroupRecord, string>;
+  groupSenderKeys!: Table<GroupSenderKeyRecord, string>;
+  groupPeerKeys!: Table<GroupPeerKeyRecord, string>;
   profiles!: Table<UserProfileRecord, string>;
   signalIdentity!: Table<SignalIdentityRecord, string>;
   signalPreKeys!: Table<SignalKeyPairRecord, string>;
@@ -62,6 +89,8 @@ export class UserDatabase extends Dexie {
       contacts: 'id',
       meta: 'id',
       groups: 'id, ownerId',
+      groupSenderKeys: 'id, groupId',
+      groupPeerKeys: 'id, groupId',
       profiles: 'id, updatedAt',
       signalIdentity: 'id',
       signalPreKeys: 'id',
@@ -103,6 +132,8 @@ export class AppDatabase {
   get contacts() { return this.db.contacts; }
   get meta() { return this.db.meta; }
   get groups() { return this.db.groups; }
+  get groupSenderKeys() { return this.db.groupSenderKeys; }
+  get groupPeerKeys() { return this.db.groupPeerKeys; }
   get profiles() { return this.db.profiles; }
   get signalIdentity() { return this.db.signalIdentity; }
   get signalPreKeys() { return this.db.signalPreKeys; }

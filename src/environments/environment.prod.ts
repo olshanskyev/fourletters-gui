@@ -9,6 +9,5 @@ export const environment = {
   redirectUrl: '__OAUTH_REDIRECT_URL__',
   standalone: false,
   umamiWebsiteId: '__UMAMI_WEBSITE_ID__',
-  vapidPublicKey: '__PUSH_VAPID_PUBLIC_KEY__',
-  enableServiceWorker: true
+  vapidPublicKey: '__PUSH_VAPID_PUBLIC_KEY__'
 };

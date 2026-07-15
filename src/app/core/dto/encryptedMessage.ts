@@ -15,19 +15,19 @@ export interface EncryptedMessage {
      */
     messageId: string;
     /**
-     * ID of the recipient user
+     * ID of the recipient user. Required for a 1:1 message. Omitted for a group message.
      */
-    recipientId: string;
+    recipientId?: string;
     /**
      * ID of the sender user. Set by the Server from the authenticated session at send time; any client-provided value is ignored. Omitted in the send request.
      */
     senderId?: string;
     /**
-     * E2E encrypted Signal ciphertext. Format \'<sessionType>.<bodyBase64>\' where sessionType is 1 (WhisperMessage, established session) or 3 (PreKeyWhisperMessage, establishes the session). The Server treats it as opaque.
+     * E2E encrypted ciphertext. Format \'<sessionType>.<bodyBase64>\'. sessionType is 1 (WhisperMessage, established pairwise session) or 3 (PreKeyWhisperMessage, establishes the pairwise session) for a 1:1 payload, or 4 (SenderKeyMessage) for a group payload encrypted once with the sender\'s per-group Sender Key.
      */
     payload: string;
     /**
-     * Present only for group messages. Identifies the group so the recipient threads the message into the group conversation. The sender encrypts and sends one independent 1:1 copy per member; the Server treats each copy as an ordinary 1:1 message. Omitted for 1:1 messages.
+     * Present only for group messages.
      */
     groupId?: string;
 }

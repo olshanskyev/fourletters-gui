@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { CryptoService } from '@core/services/crypto';
 import { SignalSessionService } from '@core/services/crypto/signal';
+import { GroupCipherService, SenderKeyDistribution } from '@core/services/crypto/group';
 import { MessagesRepository } from './messages.repository';
 import { ContactsService } from '@core/services/contacts';
 import { IdentityService } from '@core/services/identity';
@@ -19,6 +20,23 @@ export class UndecryptableError extends Error {
   }
 }
 
+/**
+ * A decrypted pairwise (1:1) payload. It is either an ordinary chat message, a Sender Key
+ * Distribution Message (SKDM) that carries a peer's group Sender Key, or a group message
+ * re-delivered over the 1:1 ratchet to a member that could not decrypt the group copy. All travel
+ * over the same Double Ratchet session and are distinguished by a small control envelope.
+ */
+export type PairwiseContent =
+  | { kind: 'chat'; text: string }
+  | { kind: 'skdm'; skdm: SenderKeyDistribution }
+  | { kind: 'group-redelivery'; groupId: string; text: string };
+
+/** Control envelope wrapping every pairwise plaintext so SKDMs and chats share one ratchet. */
+type PairwiseEnvelope =
+  | { t: 'chat'; x: string }
+  | { t: 'skdm'; d: SenderKeyDistribution }
+  | { t: 'grp'; g: string; x: string };
+
 @Injectable({
   providedIn: 'root'
 })
@@ -26,6 +44,7 @@ export class SecureMessageService {
   static readonly MAX_CACHE_SIZE = 200;
   private crypto = inject(CryptoService);
   private signal = inject(SignalSessionService);
+  private groupCipher = inject(GroupCipherService);
   private messagesRepo = inject(MessagesRepository);
   private contacts = inject(ContactsService);
   private identity = inject(IdentityService);
@@ -35,7 +54,7 @@ export class SecureMessageService {
   private memoryCache = new Map<string, string>(); // messageId -> plaintext cache
 
   /**
-   * Encrypt an outgoing message through the recipient's ratchet session, opening one from their
+   * Encrypt an outgoing chat message through the recipient's ratchet session, opening one from their
    * pre-key bundle if needed. Pass forceNewSession=true to re-key after the recipient changed device.
    */
   async buildOutgoingPayload(
@@ -43,24 +62,108 @@ export class SecureMessageService {
     plaintext: string,
     forceNewSession = false
   ): Promise<{ payload: string }> {
-    if (forceNewSession || !(await this.signal.hasSession(recipientId))) {
-      const bundle = await this.contacts.getContactBundle(recipientId);
-      await this.signal.establishSession(recipientId, bundle);
-    }
-    const payload = await this.signal.encrypt(recipientId, plaintext);
+    const envelope: PairwiseEnvelope = { t: 'chat', x: plaintext };
+    return { payload: await this.encryptPairwise(recipientId, envelope, forceNewSession) };
+  }
+
+  /**
+   * Encrypt a Sender Key Distribution Message to a group member over the pairwise ratchet
+   */
+  async buildDistributionPayload(
+    recipientId: string,
+    skdm: SenderKeyDistribution
+  ): Promise<{ payload: string }> {
+    const envelope: PairwiseEnvelope = { t: 'skdm', d: skdm };
+    return { payload: await this.encryptPairwise(recipientId, envelope, false) };
+  }
+
+  /**
+   * Re-encrypt a group message's plaintext over the pairwise ratchet to a single member that
+   * NACK'd the group copy (new device).
+   */
+  async buildGroupRedeliveryPayload(
+    recipientId: string,
+    groupId: string,
+    plaintext: string
+  ): Promise<{ payload: string }> {
+    const envelope: PairwiseEnvelope = { t: 'grp', g: groupId, x: plaintext };
+    return { payload: await this.encryptPairwise(recipientId, envelope, true) };
+  }
+
+  /** Encrypt a group chat message once with this device's Sender Key for the group epoch. */
+  async buildGroupPayload(
+    groupId: string,
+    epoch: number,
+    plaintext: string
+  ): Promise<{ payload: string }> {
+    const payload = await this.groupCipher.encrypt(groupId, epoch, plaintext);
     return { payload };
   }
 
   /**
-   * Decrypt an incoming ratchet payload. A failure means there is no usable session (the sender
-   * sealed it to a stale device key) — surface it so the caller can NACK.
+   * Decrypt an incoming pairwise ratchet payload into either a chat message or an SKDM. A failure
+   * means there is no usable session (the sender sealed it to a stale device key) — surface it so
+   * the caller can NACK.
    */
-  async unpackIncomingPayload(senderId: string, payload: string): Promise<string> {
+  async unpackIncomingPayload(senderId: string, payload: string): Promise<PairwiseContent> {
+    let plaintext: string;
     try {
-      return await this.signal.decrypt(senderId, payload);
+      plaintext = await this.signal.decrypt(senderId, payload);
     } catch (err) {
       throw new UndecryptableError(senderId, err);
     }
+
+    let envelope: PairwiseEnvelope;
+    try {
+      envelope = JSON.parse(plaintext);
+    } catch {
+      // Legacy/plain payloads without an envelope are treated as chat text.
+      return { kind: 'chat', text: plaintext };
+    }
+    if (envelope.t === 'skdm') {
+      return { kind: 'skdm', skdm: envelope.d };
+    }
+    if (envelope.t === 'grp') {
+      return { kind: 'group-redelivery', groupId: envelope.g, text: envelope.x };
+    }
+    return { kind: 'chat', text: envelope.x };
+  }
+
+  async unpackGroupPayload(senderId: string, groupId: string, payload: string): Promise<string> {
+    return this.groupCipher.decrypt(senderId, groupId, payload);
+  }
+
+  async applyDistribution(senderId: string, skdm: SenderKeyDistribution): Promise<void> {
+    await this.groupCipher.applyDistribution(senderId, skdm);
+  }
+
+  async buildDistribution(groupId: string, epoch: number): Promise<SenderKeyDistribution> {
+    return this.groupCipher.buildDistribution(groupId, epoch);
+  }
+
+  async distributedMembers(groupId: string, epoch: number): Promise<string[]> {
+    return this.groupCipher.distributedMembers(groupId, epoch);
+  }
+
+  async markDistributed(groupId: string, epoch: number, members: string[]): Promise<void> {
+    await this.groupCipher.markDistributed(groupId, epoch, members);
+  }
+
+  async clearDistribution(groupId: string, epoch: number, memberId: string): Promise<void> {
+    await this.groupCipher.clearDistribution(groupId, epoch, memberId);
+  }
+
+  // --- Shared pairwise helper ----------------------------------------------------------
+  private async encryptPairwise(
+    recipientId: string,
+    envelope: PairwiseEnvelope,
+    forceNewSession: boolean
+  ): Promise<string> {
+    if (forceNewSession || !(await this.signal.hasSession(recipientId))) {
+      const bundle = await this.contacts.getContactBundle(recipientId);
+      await this.signal.establishSession(recipientId, bundle);
+    }
+    return this.signal.encrypt(recipientId, JSON.stringify(envelope));
   }
 
   /**
@@ -113,7 +216,7 @@ export class SecureMessageService {
   ): Promise<boolean> {
     const myId = this.authService.currentUser()?.id;
     if (!myId) {
-      console.warn('Cannot verify receipt: my user ID is unknown (not logged in).');
+      console.debug('Cannot verify receipt: my user ID is unknown (not logged in).');
       return false;
     }
 

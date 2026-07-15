@@ -12,6 +12,5 @@ export const environment = {
   redirectUrl: 'https://localhost',
   standalone: true,
   umamiWebsiteId: '',
-  vapidPublicKey: '',
-  enableServiceWorker: false
+  vapidPublicKey: ''
 };

@@ -22,6 +22,7 @@ export class OutboxService {
   private secureMsg = inject(SecureMessageService);
   private groups = inject(GroupsService);
   private auth = inject(AuthService);
+  private receiptLocks = new Map<string, Promise<void>>();
 
   async sendMessage(
     conversationId: string,
@@ -51,8 +52,7 @@ export class OutboxService {
       isMine: true,
       createdAt: time,
       status: 'pending',
-      retryCount: 0,
-      ciphers: {}
+      retryCount: 0
     };
 
     // Persist before transmitting so a send/encrypt failure can be marked for manual resend.
@@ -69,7 +69,16 @@ export class OutboxService {
     }
   }
 
-  async processReceipt(messageId: string, status: 'delivered' | 'read') {
+  async processReceipt(messageId: string, status: 'delivered' | 'read'): Promise<void> {
+    // Serialize concurrent receipts for the same message to prevent a race where a late-arriving
+    // 'delivered' receipt overwrites a 'read' status that was written concurrently.
+    const current = this.receiptLocks.get(messageId) ?? Promise.resolve();
+    const next = current.then(() => this._applyReceipt(messageId, status));
+    this.receiptLocks.set(messageId, next.catch(() => undefined));
+    return next;
+  }
+
+  private async _applyReceipt(messageId: string, status: 'delivered' | 'read'): Promise<void> {
     try {
       const msg = await this.repository.getMessageById(messageId);
       if (msg) {
@@ -86,16 +95,25 @@ export class OutboxService {
   }
 
   /**
-   * Re-key and resend a copy after the recipient NACK'd it (they changed device). Opens a fresh
-   * session from their new bundle and re-encrypts — the one place re-encryption is correct. For a
-   * group message it re-keys only the single member that NACK'd, identified by senderId.
+   * Recover after a recipient NACK'd a message as undecryptable (they changed device).
+   *
+   * For a 1:1 message we open a fresh session from the peer's new bundle and re-encrypt. For a
+   * group message we cannot resend the stored Sender-Key ciphertext (the chain has ratcheted past
+   * it), so we re-encrypt this one payload over the pairwise ratchet and 1:1-send it to that member
+   * (see {@link recoverGroupMessage}), then redistribute our current Sender Key for FUTURE messages.
    */
   async resendAfterKeyChange(messageId: string, senderId: string): Promise<void> {
     const msg = await this.repository.getMessageById(messageId);
     if (!msg || !msg.isMine) {
       return;
     }
-    const targetId = msg.kind === 'group' ? senderId : msg.recipientId;
+
+    if (msg.kind === 'group') {
+      await this.recoverGroupMessage(msg, senderId);
+      return;
+    }
+
+    const targetId = msg.recipientId;
     if (!targetId) {
       return;
     }
@@ -109,7 +127,7 @@ export class OutboxService {
     try {
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
       const { payload } = await this.secureMsg.buildOutgoingPayload(targetId, plaintext, true);
-      msg.ciphers = { ...(msg.ciphers ?? {}), [targetId]: payload };
+      msg.cipher = payload;
       nackResent.add(targetId);
       msg.nackResent = nackResent;
       msg.status = 'pending';
@@ -122,6 +140,43 @@ export class OutboxService {
     } catch (err) {
       console.error('Failed to resend message after key change:', messageId, err);
       await this.markFailed(msg);
+    }
+  }
+
+  /**
+   * Recover a group message a member NACK'd: re-encrypt this one payload over the pairwise ratchet
+   * and 1:1-send it to that member (once), then redistribute our current Sender Key so their FUTURE
+   * group messages decrypt.
+   */
+  private async recoverGroupMessage(msg: GroupMessage, memberId: string): Promise<void> {
+    const nackResent = msg.nackResent ?? new Set<string>();
+    if (!nackResent.has(memberId)) {
+      try {
+        const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
+        const { payload } = await this.secureMsg.buildGroupRedeliveryPayload(
+          memberId, msg.groupId, plaintext
+        );
+        await lastValueFrom(this.messagesApi.sendMessage(memberId, payload));
+        nackResent.add(memberId);
+        msg.nackResent = nackResent;
+        await this.repository.updateMessage(msg).catch(() => undefined);
+      } catch (err) {
+        console.error('Failed to re-deliver group message after NACK:', msg.id, memberId, err);
+      }
+    }
+    await this.redistributeSenderKey(msg, memberId);
+  }
+
+  /**
+   * Force-redistribute this device's current Sender Key to a member that NACK'd a group message.
+   */
+  private async redistributeSenderKey(msg: GroupMessage, memberId: string): Promise<void> {
+    try {
+      const { epoch } = await this.groups.getRoster(msg.groupId);
+      await this.secureMsg.clearDistribution(msg.groupId, epoch, memberId);
+      await this.distributeSenderKey(msg.groupId, epoch, [memberId]);
+    } catch (err) {
+      console.error('Failed to redistribute Sender Key after NACK:', msg.id, memberId, err);
     }
   }
 
@@ -308,40 +363,73 @@ export class OutboxService {
   }
 
   /**
-   * Send one independent 1:1 copy per current group member (excluding self), all sharing the
-   * message's id and carrying the groupId for threading. Reuses each member's stored ciphertext and
-   * only encrypts for members that lack one (e.g. joined since the message was first sent).
+   * Send a group message with Sender Keys: lazily distribute this device's Sender Key
+   * (via a 1:1 SKDM) to any member that has not received it for the current epoch, then encrypt the
+   * message ONCE and hand a single copy to the Server, which fans it out to the whole roster.
    */
   private async fanOutGroup(msg: GroupMessage): Promise<AcceptedResponse | undefined> {
     const groupId = msg.groupId;
     const myId = this.auth.currentUser()?.id;
-    const members = (await this.groups.getMembers(groupId)).filter(memberId => memberId !== myId);
+    const { members, epoch } = await this.groups.getRoster(groupId);
+    const others = members.filter(memberId => memberId !== myId);
 
-    const results = await Promise.all(
-      members.map(async memberId => {
-        const payload = await this.cipherFor(msg, memberId);
-        return lastValueFrom(
-          this.messagesApi.sendMessage(memberId, payload, msg.id, groupId)
-        );
+    await this.distributeSenderKey(groupId, epoch, others);
+
+    // Encrypt once for the epoch (reuse the stored ciphertext on resend so the copy is idempotent).
+    let payload = msg.epoch === epoch ? msg.cipher : undefined;
+    if (!payload) {
+      const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
+      payload = (await this.secureMsg.buildGroupPayload(groupId, epoch, plaintext)).payload;
+      msg.epoch = epoch;
+      msg.cipher = payload;
+      await this.repository.updateMessage(msg).catch(() => undefined);
+    }
+
+    return lastValueFrom(this.messagesApi.sendGroupMessage(groupId, payload, msg.id));
+  }
+
+  /**
+   * Send this device's Sender Key to every member that does not yet hold it for the given epoch.
+   * Each SKDM travels over the pairwise Double Ratchet; a per-member send failure is logged but does
+   * not abort the others (they simply NACK later and trigger a redistribution).
+   */
+  private async distributeSenderKey(groupId: string, epoch: number, members: string[])
+    : Promise<void> {
+    const already = await this.secureMsg.distributedMembers(groupId, epoch);
+    const missing = members.filter(memberId => !already.includes(memberId));
+    if (missing.length === 0) {
+      return;
+    }
+
+    const skdm = await this.secureMsg.buildDistribution(groupId, epoch);
+    const delivered: string[] = [];
+    await Promise.all(
+      missing.map(async memberId => {
+        try {
+          const { payload } = await this.secureMsg.buildDistributionPayload(memberId, skdm);
+          await lastValueFrom(this.messagesApi.sendMessage(memberId, payload));
+          delivered.push(memberId);
+        } catch (err) {
+          console.error('Failed to distribute Sender Key to member:', memberId, err);
+        }
       })
     );
-    await this.repository.updateMessage(msg).catch(() => undefined); // persist any new ciphers
-
-    return results.at(-1);
+    if (delivered.length > 0) {
+      await this.secureMsg.markDistributed(groupId, epoch, delivered);
+    }
   }
 
   /**
    * The exact ciphertext to (re)send to a recipient. Returns the stored bytes when present;
-   * otherwise encrypts the at-rest plaintext once and records it (mutates msg.ciphers).
+   * otherwise encrypts the at-rest plaintext once and records it (mutates msg.cipher).
    */
   private async cipherFor(msg: LocalMessage, recipientId: string): Promise<string> {
-    const existing = msg.ciphers?.[recipientId];
-    if (existing) {
-      return existing;
+    if (msg.cipher) {
+      return msg.cipher;
     }
     const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
     const { payload } = await this.secureMsg.buildOutgoingPayload(recipientId, plaintext);
-    msg.ciphers = { ...(msg.ciphers ?? {}), [recipientId]: payload };
+    msg.cipher = payload;
     return payload;
   }
 

@@ -2,6 +2,7 @@ import {
   ApplicationConfig,
   importProvidersFrom,
   inject,
+  isDevMode,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
@@ -34,7 +35,7 @@ export const appConfig: ApplicationConfig = {
     }),
     importProvidersFrom(NgxPermissionsModule.forRoot()),
     provideServiceWorker('ngsw-worker.js', {
-      enabled: environment.enableServiceWorker,
+      enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',
     }),
   ],

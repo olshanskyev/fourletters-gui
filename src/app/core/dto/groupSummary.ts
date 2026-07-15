@@ -16,5 +16,9 @@ export interface GroupSummary {
     id: string;
     name: string;
     ownerId: string;
+    /**
+     * Server-authoritative Sender-Key epoch.
+     */
+    epoch?: number;
 }
 

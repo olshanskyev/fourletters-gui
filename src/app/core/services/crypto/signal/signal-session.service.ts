@@ -20,6 +20,7 @@ import { withSignalLock } from './web-lock';
 
 const DEVICE_ID = 1; // single active device per user
 const SIGNED_PREKEY_ID = 1;
+const PREKEY_MESSAGE_TYPE = 3; // wire sessionType for a PreKeyWhisperMessage (establishes the session)
 export const INITIAL_PREKEY_COUNT = 50;
 export const PREKEY_LOW_WATERMARK = 10;
 export const PREKEY_REPLENISH_BATCH = 50;
@@ -164,7 +165,7 @@ export class SignalSessionService {
       const type = Number(payload.slice(0, dot));
       const body = atob(payload.slice(dot + 1));
       const cipher = new SessionCipher(this.store, this.address(userId));
-      const plain = type === 3
+      const plain = type === PREKEY_MESSAGE_TYPE
         ? await cipher.decryptPreKeyWhisperMessage(body, 'binary')
         : await cipher.decryptWhisperMessage(body, 'binary');
       return this.decoder.decode(plain);

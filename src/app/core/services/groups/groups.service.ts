@@ -11,18 +11,15 @@ import { GroupRecord } from '@core/services/database/app.database';
 import { GroupsApiService } from './groups-api.service';
 import { GroupsRepository } from './groups.repository';
 import { staleWhileRevalidate } from '@core/services/cache/swr-cache';
+import { GroupKeyStore } from '@core/services/crypto/group';
 
-/**
- * High-level group management: creating groups, owner-only roster changes, and leaving. The Server
- * owns only the roster; a group message is sent by the client as one independent 1:1 copy per
- * member, so there is no group key to mint, wrap, distribute, or rotate.
- */
 @Injectable({
   providedIn: 'root'
 })
 export class GroupsService {
   private api = inject(GroupsApiService);
   private groupsRepo = inject(GroupsRepository);
+  private groupKeys = inject(GroupKeyStore);
 
   private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -59,8 +56,14 @@ export class GroupsService {
 
   /** Fetch a group's full detail from the Server and persist it locally. */
   async refreshGroup(groupId: string): Promise<Group> {
+    const previous = await this.groupsRepo.getGroup(groupId);
     const group = await lastValueFrom(this.api.getGroup(groupId));
     await this.persistGroup(group);
+    // A Server epoch bump (a member was removed) invalidates every Sender Key for the old epoch.
+    const epoch = group.epoch ?? 0;
+    if (previous && (previous.epoch ?? 0) < epoch) {
+      await this.groupKeys.pruneOldEpochs(groupId, epoch);
+    }
     return group;
   }
 
@@ -81,12 +84,12 @@ export class GroupsService {
   }
 
   /**
-   * The current roster for a group, always refreshed from the Server. The Server is the only
-   * authority on membership
+   * The current roster together with the Server-authoritative Sender-Key epoch, always refreshed
+   * from the Server.
    */
-  async getMembers(groupId: string): Promise<string[]> {
+  async getRoster(groupId: string): Promise<{ members: string[]; epoch: number }> {
     const group = await this.refreshGroup(groupId);
-    return group.members.map(m => m.userId);
+    return { members: group.members.map(m => m.userId), epoch: group.epoch ?? 0 };
   }
 
   /**
@@ -121,6 +124,7 @@ export class GroupsService {
       name: summary.name,
       ownerId: summary.ownerId,
       members: existing?.members ?? [],
+      epoch: summary.epoch ?? existing?.epoch ?? 0,
       updatedAt: 0 // stale: roster is fetched lazily on first getGroup
     });
   }
@@ -138,11 +142,13 @@ export class GroupsService {
       name: group.name,
       ownerId: group.ownerId,
       members: group.members.map(m => m.userId),
+      epoch: group.epoch ?? 0,
       updatedAt: Date.now()
     };
   }
 
   private async removeLocalGroup(groupId: string): Promise<void> {
     await this.groupsRepo.deleteGroup(groupId);
+    await this.groupKeys.deleteGroup(groupId);
   }
 }
