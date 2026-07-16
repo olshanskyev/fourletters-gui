@@ -16,6 +16,7 @@
   &.active-chat {
     color: var(--mat-sys-on-primary);
     background-color: var(--primary-color);
+
     .unread-badge {
       color: var(--mat-sys-on-primary-container);
       background-color: var(--mat-sys-primary-container);

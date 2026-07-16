@@ -3,6 +3,7 @@ import { CryptoService } from '@core/services/crypto';
 import { SignalSessionService } from '@core/services/crypto/signal';
 import { GroupCipherService, SenderKeyDistribution } from '@core/services/crypto/group';
 import { MessagesRepository } from './messages.repository';
+import { MessageContent, MessageContentType } from './models/messages.model';
 import { ContactsService } from '@core/services/contacts';
 import { IdentityService } from '@core/services/identity';
 import { AuthService } from '@core/services/authentication/auth.service';
@@ -21,21 +22,37 @@ export class UndecryptableError extends Error {
 }
 
 /**
+ * The end-to-end encrypted content of a chat message, shared by the 1:1 and group transports.
+ * `ts` is the sender's send time (epoch ms) so every device orders the message the same way; `ct`
+ * is the content type ([MessageContentType]) and `x` the content payload.
+ */
+export interface ChatBody {
+  ts: number;
+  ct: MessageContentType;
+  x: string;
+}
+
+/** A decoded {@link ChatBody}: the parsed content plus the sender's send time (epoch ms). */
+export interface DecodedContent { content: MessageContent; ts?: number }
+
+/**
  * A decrypted pairwise (1:1) payload. It is either an ordinary chat message, a Sender Key
  * Distribution Message (SKDM) that carries a peer's group Sender Key, or a group message
  * re-delivered over the 1:1 ratchet to a member that could not decrypt the group copy. All travel
- * over the same Double Ratchet session and are distinguished by a small control envelope.
+ * over the same Double Ratchet session and are distinguished by a small control envelope. The chat
+ * and re-delivery variants carry the same parsed {@link MessageContent} a group message yields.
  */
 export type PairwiseContent =
-  | { kind: 'chat'; text: string }
+  | ({ kind: 'chat' } & DecodedContent)
   | { kind: 'skdm'; skdm: SenderKeyDistribution }
-  | { kind: 'group-redelivery'; groupId: string; text: string };
+  | ({ kind: 'group-redelivery'; groupId: string } & DecodedContent);
+
 
 /** Control envelope wrapping every pairwise plaintext so SKDMs and chats share one ratchet. */
 type PairwiseEnvelope =
-  | { t: 'chat'; x: string }
+  | { t: 'chat'; b: ChatBody }
   | { t: 'skdm'; d: SenderKeyDistribution }
-  | { t: 'grp'; g: string; x: string };
+  | { t: 'grp'; g: string; b: ChatBody };
 
 @Injectable({
   providedIn: 'root'
@@ -60,9 +77,10 @@ export class SecureMessageService {
   async buildOutgoingPayload(
     recipientId: string,
     plaintext: string,
+    ts: number,
     forceNewSession = false
   ): Promise<{ payload: string }> {
-    const envelope: PairwiseEnvelope = { t: 'chat', x: plaintext };
+    const envelope: PairwiseEnvelope = { t: 'chat', b: this.textBody(ts, plaintext) };
     return { payload: await this.encryptPairwise(recipientId, envelope, forceNewSession) };
   }
 
@@ -84,9 +102,10 @@ export class SecureMessageService {
   async buildGroupRedeliveryPayload(
     recipientId: string,
     groupId: string,
-    plaintext: string
+    plaintext: string,
+    ts: number
   ): Promise<{ payload: string }> {
-    const envelope: PairwiseEnvelope = { t: 'grp', g: groupId, x: plaintext };
+    const envelope: PairwiseEnvelope = { t: 'grp', g: groupId, b: this.textBody(ts, plaintext) };
     return { payload: await this.encryptPairwise(recipientId, envelope, true) };
   }
 
@@ -94,9 +113,12 @@ export class SecureMessageService {
   async buildGroupPayload(
     groupId: string,
     epoch: number,
-    plaintext: string
+    plaintext: string,
+    ts: number
   ): Promise<{ payload: string }> {
-    const payload = await this.groupCipher.encrypt(groupId, epoch, plaintext);
+    const payload = await this.groupCipher.encrypt(
+      groupId, epoch, JSON.stringify(this.textBody(ts, plaintext))
+    );
     return { payload };
   }
 
@@ -117,20 +139,49 @@ export class SecureMessageService {
     try {
       envelope = JSON.parse(plaintext);
     } catch {
-      // Legacy/plain payloads without an envelope are treated as chat text.
-      return { kind: 'chat', text: plaintext };
+      const { content, ts } = this.contentFromBody(undefined);
+      return { kind: 'chat', content, ts };
     }
     if (envelope.t === 'skdm') {
       return { kind: 'skdm', skdm: envelope.d };
     }
     if (envelope.t === 'grp') {
-      return { kind: 'group-redelivery', groupId: envelope.g, text: envelope.x };
+      const { content, ts } = this.contentFromBody(envelope.b);
+      return { kind: 'group-redelivery', groupId: envelope.g, content, ts };
     }
-    return { kind: 'chat', text: envelope.x };
+    const { content, ts } = this.contentFromBody(envelope.b);
+    return { kind: 'chat', content, ts };
   }
 
-  async unpackGroupPayload(senderId: string, groupId: string, payload: string): Promise<string> {
-    return this.groupCipher.decrypt(senderId, groupId, payload);
+  async unpackGroupPayload(senderId: string, groupId: string, payload: string)
+    : Promise<DecodedContent> {
+    const plaintext = await this.groupCipher.decrypt(senderId, groupId, payload);
+    let candidate: unknown;
+    try {
+      candidate = JSON.parse(plaintext);
+    } catch {
+      candidate = undefined;
+    }
+    return this.contentFromBody(candidate);
+  }
+
+  /** Wrap chat text in the shared content envelope (sender time + content type). */
+  private textBody(ts: number, text: string): ChatBody {
+    return { ts, ct: 'text', x: text };
+  }
+
+  private contentFromBody(body: unknown): DecodedContent {
+    if (this.isChatBody(body)) {
+      const ts = typeof body.ts === 'number' ? body.ts : undefined;
+      // Only 'text' exists today; unknown content types degrade to text so nothing is lost.
+      return { content: { type: 'text', text: body.x }, ts };
+    }
+    console.error('Unexpected message body; cannot parse content', body);
+    return { content: { type: 'text', text: '' } };
+  }
+
+  private isChatBody(body: unknown): body is ChatBody {
+    return typeof body === 'object' && body !== null && typeof (body as ChatBody).x === 'string';
   }
 
   async applyDistribution(senderId: string, skdm: SenderKeyDistribution): Promise<void> {

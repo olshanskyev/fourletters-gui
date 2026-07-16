@@ -86,3 +86,4 @@ The application follows a standard Angular architecture with the following key c
 - use @for and @if, and not *ngIf and *ngFor
 - use css classes like "d-flex flex-col p-8 ..." defined via @styles/helpers instead of custom classes
 - do not modify objects inside dto folder
+- max line length is 100 characters (linting preferences)

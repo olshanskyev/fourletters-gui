@@ -1,12 +1,20 @@
 export type MessageStatus = 'pending' | 'accepted' | 'delivered' | 'read' | 'failed';
 
+
+export type MessageContentType = 'text';
+
+export interface MessageContent { type: 'text'; text: string }
+
 interface BaseMessage {
   id: string;
   conversationId: string;
   senderId: string;
   text: string;
+  contentType?: MessageContentType;
   isMine: boolean;
-  createdAt: number;
+  createdAt: number; // ordering/display key
+  sentAt?: number;
+  receivedAt?: number;
   status?: MessageStatus;
   serverStartedAt?: number; // For outbox resync when server restarts
   retryCount?: number; // For outbox resync when server restarts

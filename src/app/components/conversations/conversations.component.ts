@@ -1,4 +1,4 @@
-import { Component, inject, ChangeDetectionStrategy, effect } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -62,11 +62,5 @@ export class ConversationsComponent {
 
   newChat() {
     this.masterViewService.setView('contacts');
-  }
-
-  constructor() {
-    effect(() => {
-      console.log('ConversationsComponent: conversations changed', this.conversations());
-    });
   }
 }

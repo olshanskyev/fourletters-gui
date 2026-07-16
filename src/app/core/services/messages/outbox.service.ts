@@ -48,6 +48,7 @@ export class OutboxService {
       conversationId: convo.id,
       senderId: 'me', // Placeholder, real senderId the server calculates based on auth
       text: await this.secureMsg.encryptForAtRest(id, text),
+      contentType: 'text',
       isMine: true,
       createdAt: time,
       status: 'pending',
@@ -108,7 +109,9 @@ export class OutboxService {
 
     try {
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-      const { payload } = await this.secureMsg.buildOutgoingPayload(targetId, plaintext, true);
+      const { payload } = await this.secureMsg.buildOutgoingPayload(
+        targetId, plaintext, msg.createdAt, true
+      );
       msg.cipher = payload;
       nackResent.add(targetId);
       msg.nackResent = nackResent;
@@ -136,7 +139,7 @@ export class OutboxService {
       try {
         const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
         const { payload } = await this.secureMsg.buildGroupRedeliveryPayload(
-          memberId, msg.groupId, plaintext
+          memberId, msg.groupId, plaintext, msg.createdAt
         );
         await lastValueFrom(this.messagesApi.sendMessage(memberId, payload));
         nackResent.add(memberId);
@@ -361,7 +364,9 @@ export class OutboxService {
     let payload = msg.epoch === epoch ? msg.cipher : undefined;
     if (!payload) {
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-      payload = (await this.secureMsg.buildGroupPayload(groupId, epoch, plaintext)).payload;
+      payload = (await this.secureMsg.buildGroupPayload(
+        groupId, epoch, plaintext, msg.createdAt)
+      ).payload;
       msg.epoch = epoch;
       msg.cipher = payload;
       await this.repository.updateMessage(msg).catch(() => undefined);
@@ -410,7 +415,9 @@ export class OutboxService {
       return msg.cipher;
     }
     const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
-    const { payload } = await this.secureMsg.buildOutgoingPayload(recipientId, plaintext);
+    const { payload } = await this.secureMsg.buildOutgoingPayload(
+      recipientId, plaintext, msg.createdAt
+    );
     msg.cipher = payload;
     return payload;
   }

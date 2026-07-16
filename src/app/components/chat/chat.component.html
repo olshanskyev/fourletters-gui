@@ -74,7 +74,7 @@
                     @if (msg.isMine) {
                       <mat-icon
                         class="m-l-2"
-                        [class]="msg.status === 'read' ? 'opacity-80' : 'opacity-60'"
+                        [class]="msg.status === 'read' ? 'opacity-80' : 'opacity-50'"
                       >
                         @if (msg.status === 'pending') {
                           schedule
@@ -84,6 +84,8 @@
                           done_all
                         } @else if (msg.status === 'read') {
                           done_all
+                        } @else if (msg.status === 'failed') {
+                          error
                         } @else {
                           help_outline
                         }

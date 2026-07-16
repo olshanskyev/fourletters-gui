@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
-import { LocalMessage } from './models/messages.model';
+import { LocalMessage, MessageContent, MessageContentType } from './models/messages.model';
 import { Observable, Subscription, lastValueFrom, concatMap } from 'rxjs';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { HubService } from './ws/hub.service';
@@ -15,6 +15,9 @@ import { GroupUndecryptableError } from '@core/services/crypto/group';
   providedIn: 'root'
 })
 export class MessagesService {
+  /** How far a sender's send time may run ahead of our arrival time before we clamp it (5 min). */
+  private static readonly MAX_CLOCK_SKEW = 5 * 60 * 1000;
+
   private repository = inject(MessagesRepository);
   private conversationsService = inject(ConversationsService);
   private hubService = inject(HubService);
@@ -125,9 +128,11 @@ export class MessagesService {
       return;
     }
 
-    // De-duplicate: Ensure we don't save the same message again when unioning Hot and Cold tiers
+    // De-duplicate: Ensure we don't save the same message again when unioning Hot and Cold tiers.
+    // A duplicate means we stored it but the server never got our receipt
     const existing = await this.repository.hasMessage(encryptedMessage.messageId);
     if (existing) {
+      await this.reacknowledgeStored(encryptedMessage.messageId, encryptedMessage.senderId);
       return;
     }
 
@@ -144,7 +149,7 @@ export class MessagesService {
         // The signature was valid but we lack a usable key (sealed to a previous device key, or a
         // Sender Key we never received). NACK it so the Server drops our pending copy and the sender
         // re-keys / redistributes; discard it locally.
-        await this.acknowledgeUndecryptable(messageId, senderId);
+        await this.sendReceipt(messageId, senderId, ReceiptType.Undecryptable);
       } else {
         console.warn('Failed to process incoming message', messageId, err);
       }
@@ -162,7 +167,7 @@ export class MessagesService {
 
     if (content.kind === 'skdm') {
       await this.secureMsg.applyDistribution(senderId, content.skdm);
-      await this.acknowledgeDelivery(messageId, senderId);
+      await this.sendReceipt(messageId, senderId, ReceiptType.Delivered);
       return;
     }
 
@@ -171,11 +176,11 @@ export class MessagesService {
       // copy (new device). It rides in as a 1:1 message but belongs in the group conversation.
       encryptedMessage.groupId = content.groupId;
       encryptedMessage.recipientId = undefined;
-      await this.persistIncoming(encryptedMessage, content.text);
+      await this.persistIncoming(encryptedMessage, content.content, content.ts);
       return;
     }
 
-    await this.persistIncoming(encryptedMessage, content.text);
+    await this.persistIncoming(encryptedMessage, content.content, content.ts);
   }
 
   /**
@@ -185,23 +190,35 @@ export class MessagesService {
   private async processIncomingGroupMessage(encryptedMessage: EncryptedMessage | any)
     : Promise<void> {
     const { senderId, groupId, payload } = encryptedMessage;
-    const plaintext = await this.secureMsg.unpackGroupPayload(senderId, groupId, payload);
-    await this.persistIncoming(encryptedMessage, plaintext);
+    const { content, ts } = await this.secureMsg.unpackGroupPayload(senderId, groupId, payload);
+    await this.persistIncoming(encryptedMessage, content, ts);
   }
 
   /**
    * Resolve the conversation, store the decrypted message at rest, refresh the preview, and
    * acknowledge delivery to the original sender.
    */
-  private async persistIncoming(encryptedMessage: EncryptedMessage | any, plaintext: string)
+  private async persistIncoming(
+    encryptedMessage: EncryptedMessage | any, content: MessageContent, ts?: number
+  )
     : Promise<void> {
     const { senderId, messageId } = encryptedMessage;
     const conversationId = await this.resolveIncomingConversation(encryptedMessage);
-    const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, plaintext);
-    await this.saveIncomingMessage(encryptedMessage, conversationId, ciphertextAtRest);
-    await this.conversationsService.updateLastMessage(conversationId, plaintext, Date.now());
+    const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, content.text);
+    // Order by the sender's send time so every device agrees, and so a delayed message keeps its
+    // real position instead of jumping to the bottom. Only clamp the future: a bad/lying clock may
+    // not push a message more than MAX_CLOCK_SKEW past our arrival time. A late (past) send time is
+    // legitimate (network delay) and kept as-is.
+    const receivedAt = Date.now();
+    const createdAt = ts != null
+      ? Math.min(ts, receivedAt + MessagesService.MAX_CLOCK_SKEW)
+      : receivedAt;
+    await this.saveIncomingMessage(
+      encryptedMessage, conversationId, ciphertextAtRest, content.type, createdAt, ts, receivedAt
+    );
+    await this.conversationsService.updateLastMessage(conversationId, content.text, createdAt);
     await this.conversationsService.adjustUnreadCount(conversationId, 1);
-    await this.acknowledgeDelivery(messageId, senderId);
+    await this.sendReceipt(messageId, senderId, ReceiptType.Delivered);
   }
 
   /**
@@ -215,36 +232,28 @@ export class MessagesService {
   }
 
   /**
-   * Sign and send a delivery receipt for a received message back to its original sender.
+   * Re-send the receipt for a message we already have when the server redelivers it
    */
-  private async acknowledgeDelivery(messageId: string, senderId: string): Promise<void> {
-    const receiptSignature = await this.secureMsg.signReceipt(
-      messageId, ReceiptType.Delivered, senderId
-    );
-
-    try {
-      await lastValueFrom(
-        this.messagesApi.sendReceipt(messageId, senderId, receiptSignature)
-      );
-    } catch (err) {
-      console.error('Failed to send delivery receipt:', err);
-    }
+  private async reacknowledgeStored(messageId: string, senderId: string): Promise<void> {
+    const stored = await this.repository.getMessageById(messageId);
+    const type = stored?.status === 'read' ? ReceiptType.Read : ReceiptType.Delivered;
+    await this.sendReceipt(messageId, senderId, type);
   }
 
-  /**
-   * NACK a 1:1 message we received but could not decrypt (sealed to our previous device key). The
-   * Server drops its retained copy and relays the NACK so the original sender re-keys and resends.
-   */
-  private async acknowledgeUndecryptable(messageId: string, senderId: string): Promise<void> {
+  /** Sign a receipt of the given type for a received message. */
+  private async signedReceipt(messageId: string, senderId: string, type: ReceiptType)
+    : Promise<DeliveryReceipt> {
+    const signature = await this.secureMsg.signReceipt(messageId, type, senderId);
+    return { messageId, originalSenderId: senderId, type, signature };
+  }
+
+  /** Sign and send a single receipt; failures are logged, never thrown. */
+  private async sendReceipt(messageId: string, senderId: string, type: ReceiptType): Promise<void> {
     try {
-      const signature = await this.secureMsg.signReceipt(
-        messageId, ReceiptType.Undecryptable, senderId
-      );
-      await lastValueFrom(
-        this.messagesApi.sendReceipt(messageId, senderId, signature, ReceiptType.Undecryptable)
-      );
+      const { signature } = await this.signedReceipt(messageId, senderId, type);
+      await lastValueFrom(this.messagesApi.sendReceipt(messageId, senderId, signature, type));
     } catch (err) {
-      console.error('Failed to send undecryptable receipt:', err);
+      console.error(`Failed to send ${type} receipt:`, err);
     }
   }
 
@@ -317,13 +326,7 @@ export class MessagesService {
     const receipts: DeliveryReceipt[] = [];
     for (const m of unread) {
       try {
-        const signature = await this.secureMsg.signReceipt(m.id, ReceiptType.Read, m.senderId);
-        receipts.push({
-          messageId: m.id,
-          originalSenderId: m.senderId,
-          type: ReceiptType.Read,
-          signature
-        });
+        receipts.push(await this.signedReceipt(m.id, m.senderId, ReceiptType.Read));
       } catch (e) {
         console.warn('Could not sign read receipt', m.id, e);
       }
@@ -345,15 +348,22 @@ export class MessagesService {
   private async saveIncomingMessage(
     encryptedMessage: EncryptedMessage | any,
     conversationId: string,
-    atRestText: string
+    atRestText: string,
+    contentType: MessageContentType,
+    createdAt: number,
+    sentAt: number | undefined,
+    receivedAt: number
   ): Promise<LocalMessage> {
     const base = {
       id: encryptedMessage.messageId, // Real external message id
       conversationId,
       senderId: encryptedMessage.senderId,
       text: atRestText,
+      contentType,
       isMine: false,
-      createdAt: Date.now()
+      createdAt,
+      sentAt,
+      receivedAt
     };
     const message: LocalMessage = encryptedMessage.groupId
       ? { ...base, kind: 'group', groupId: encryptedMessage.groupId }
