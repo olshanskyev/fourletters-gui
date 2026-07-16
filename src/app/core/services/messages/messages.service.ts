@@ -6,7 +6,7 @@ import { ConversationsService } from '@core/services/conversations/conversations
 import { HubService } from './ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
 import { OutboxService } from './outbox.service';
-import { ReceiptType, EncryptedMessage, ReceiptData } from '@dto/models';
+import { ReceiptType, EncryptedMessage, ReceiptData, DeliveryReceipt } from '@dto/models';
 import { SyncStateRepository } from './sync-state.repository';
 import { SecureMessageService, UndecryptableError } from './secure-message.service';
 import { GroupUndecryptableError } from '@core/services/crypto/group';
@@ -200,6 +200,7 @@ export class MessagesService {
     const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, plaintext);
     await this.saveIncomingMessage(encryptedMessage, conversationId, ciphertextAtRest);
     await this.conversationsService.updateLastMessage(conversationId, plaintext, Date.now());
+    await this.conversationsService.adjustUnreadCount(conversationId, 1);
     await this.acknowledgeDelivery(messageId, senderId);
   }
 
@@ -287,34 +288,53 @@ export class MessagesService {
   }
 
   /**
-   * Mark a message as read in the local database and send a read receipt
+   * Mark one or more received messages as read: update them locally, drop the conversation's unread
+   * count in one step, and acknowledge them to their senders with a single batched request (opening
+   * a chat with N unread sends one round-trip, not N).
    */
-  async markAsRead(message: LocalMessage): Promise<void> {
-    message.status = 'read';
-    await this.repository.updateMessage(message)
-      .catch(err => console.error('Failed to update local message as read', err));
+  async markManyAsRead(messages: LocalMessage[]): Promise<void> {
+    const unread = messages.filter(m => !m.isMine && m.status !== 'read');
+    if (unread.length === 0) {
+      return;
+    }
 
-    try {
-      const receiptSignature = await this.secureMsg.signReceipt(
-        message.id,
-        ReceiptType.Read,
-        message.senderId
-      );
+    // Local: flip to read and decrement the unread count per conversation in one write each.
+    for (const m of unread) {
+      m.status = 'read';
+    }
+    await this.repository.saveMessages(unread)
+      .catch(err => console.error('Failed to update local messages as read', err));
 
+    const perConversation = new Map<string, number>();
+    for (const m of unread) {
+      perConversation.set(m.conversationId, (perConversation.get(m.conversationId) ?? 0) + 1);
+    }
+    for (const [conversationId, count] of perConversation) {
+      await this.conversationsService.adjustUnreadCount(conversationId, -count);
+    }
+
+    // Network: one batch of individually-signed read receipts.
+    const receipts: DeliveryReceipt[] = [];
+    for (const m of unread) {
       try {
-        await lastValueFrom(
-          this.messagesApi.sendReceipt(
-            message.id,
-            message.senderId,
-            receiptSignature,
-            ReceiptType.Read
-          )
-        );
-      } catch (err) {
-        console.error('Failed to send read receipt:', err);
+        const signature = await this.secureMsg.signReceipt(m.id, ReceiptType.Read, m.senderId);
+        receipts.push({
+          messageId: m.id,
+          originalSenderId: m.senderId,
+          type: ReceiptType.Read,
+          signature
+        });
+      } catch (e) {
+        console.warn('Could not sign read receipt', m.id, e);
       }
-    } catch (e) {
-      console.warn('Could not sign read receipt', e);
+    }
+    if (receipts.length === 0) {
+      return;
+    }
+    try {
+      await lastValueFrom(this.messagesApi.sendReceiptsBatch(receipts));
+    } catch (err) {
+      console.error('Failed to send read receipts:', err);
     }
   }
 

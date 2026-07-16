@@ -26,6 +26,19 @@ export class ConversationsRepository {
   }
 
   /**
+   * Atomically add `delta` to a conversation's unread count (clamped at 0). The read-modify-write
+   * runs in a Dexie transaction so a concurrent incoming (+1) and read (-1) can't clobber each other.
+   */
+  async adjustUnreadCount(id: string, delta: number): Promise<void> {
+    await this.db.transaction(this.db.conversations, async () => {
+      const c = await this.db.conversations.get(id);
+      if (!c) return;
+      c.unreadCount = Math.max(0, c.unreadCount + delta);
+      await this.db.conversations.put(c);
+    });
+  }
+
+  /**
    * Get all conversations one-time fetch
    */
   async getAllConversations(): Promise<LocalConversation[]> {

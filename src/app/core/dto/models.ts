@@ -24,6 +24,7 @@ export * from './publicKeysBatchResponse';
 export * from './publicUser';
 export * from './pushSubscription';
 export * from './pushSubscriptionKeys';
+export * from './receiptBatchRequest';
 export * from './receiptData';
 export * from './receiptEvent';
 export * from './receiptType';

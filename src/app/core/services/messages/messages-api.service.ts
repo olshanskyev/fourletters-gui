@@ -9,6 +9,7 @@ import {
   DeliveryReceipt,
   MessageBatchRequest,
   MessageBatchResponse,
+  ReceiptBatchRequest,
   ReceiptType
 } from '@dto/models';
 
@@ -85,5 +86,13 @@ export class MessagesApiService {
       signature
     };
     return this.httpClient.post<void>('/receipts', receipt);
+  }
+
+  /**
+   * Acknowledge several received messages with one request of signed receipts.
+   */
+  sendReceiptsBatch(receipts: DeliveryReceipt[]): Observable<void> {
+    const request: ReceiptBatchRequest = { receipts };
+    return this.httpClient.post<void>('/receipts/batch', request);
   }
 }

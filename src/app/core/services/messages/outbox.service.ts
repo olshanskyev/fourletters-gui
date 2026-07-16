@@ -22,7 +22,6 @@ export class OutboxService {
   private secureMsg = inject(SecureMessageService);
   private groups = inject(GroupsService);
   private auth = inject(AuthService);
-  private receiptLocks = new Map<string, Promise<void>>();
 
   async sendMessage(
     conversationId: string,
@@ -70,25 +69,8 @@ export class OutboxService {
   }
 
   async processReceipt(messageId: string, status: 'delivered' | 'read'): Promise<void> {
-    // Serialize concurrent receipts for the same message to prevent a race where a late-arriving
-    // 'delivered' receipt overwrites a 'read' status that was written concurrently.
-    const current = this.receiptLocks.get(messageId) ?? Promise.resolve();
-    const next = current.then(() => this._applyReceipt(messageId, status));
-    this.receiptLocks.set(messageId, next.catch(() => undefined));
-    return next;
-  }
-
-  private async _applyReceipt(messageId: string, status: 'delivered' | 'read'): Promise<void> {
     try {
-      const msg = await this.repository.getMessageById(messageId);
-      if (msg) {
-        // Only upgrade status (pending -> delivered -> read)
-        if (msg.status === 'read' || (msg.status === 'delivered' && status === 'delivered')) {
-          return;
-        }
-        msg.status = status;
-        await this.repository.updateMessage(msg);
-      }
+      await this.repository.upgradeStatus(messageId, status);
     } catch (err) {
       console.error('Failed to update message state from receipt:', err);
     }

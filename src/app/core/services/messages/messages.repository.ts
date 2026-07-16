@@ -26,6 +26,20 @@ export class MessagesRepository {
   }
 
   /**
+   * Atomically upgrade a message's delivery status (pending -> delivered -> read, never downgrades).
+   * Runs in a Dexie transaction so concurrently arriving receipts for the same message can't race.
+   */
+  async upgradeStatus(id: string, status: 'delivered' | 'read'): Promise<void> {
+    await this.db.transaction(this.db.messages, async () => {
+      const msg = await this.db.messages.get(id);
+      if (!msg) return;
+      if (msg.status === 'read' || (msg.status === 'delivered' && status === 'delivered')) return;
+      msg.status = status;
+      await this.db.messages.put(msg);
+    });
+  }
+
+  /**
    * Bulk insert messages
    */
   async saveMessages(messages: LocalMessage[]): Promise<void> {

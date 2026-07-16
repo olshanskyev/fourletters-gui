@@ -1,4 +1,4 @@
-import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +13,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 import { MasterViewService } from '@core/services/shared/master-view.service';
 import { PushService } from '@core/services/push/push.service';
+import { SettingsService } from '@core/services/shared/settings.service';
 
 @Component({
   selector: 'app-conversations',
@@ -37,6 +38,7 @@ export class ConversationsComponent {
   private conversationsService = inject(ConversationsService);
   private masterViewService = inject(MasterViewService);
   private pushService = inject(PushService);
+  locale = inject(SettingsService).locale;
 
   // Automatically streams and sorts conversations from IndexedDB
   conversations = toSignal(this.conversationsService.observeConversationViews(), {
@@ -60,5 +62,11 @@ export class ConversationsComponent {
 
   newChat() {
     this.masterViewService.setView('contacts');
+  }
+
+  constructor() {
+    effect(() => {
+      console.log('ConversationsComponent: conversations changed', this.conversations());
+    });
   }
 }

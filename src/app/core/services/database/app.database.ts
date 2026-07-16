@@ -172,4 +172,11 @@ export class AppDatabase {
   async deleteMeta(key: MetaRecords): Promise<void> {
     await this.meta.delete(key);
   }
+
+  /**
+   * Run an atomic read-write transaction over the given table(s).
+   */
+  transaction<T>(tables: Table<any, any> | Table<any, any>[], scope: () => Promise<T>): Promise<T> {
+    return this.db.transaction('rw', tables as any, scope);
+  }
 }

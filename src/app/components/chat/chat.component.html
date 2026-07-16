@@ -42,39 +42,54 @@
       @if (messages().length > 0) {
         <div class="d-flex flex-col justify-content-end gap-8 p-b-4 h-full">
           @for (msg of messages(); track msg.id) {
-            <div
-              class="message-bubble"
-              [appObserveVisibility]="!msg.isMine && msg.status !== 'read'"
-              (visible)="onMessageVisible(msg)"
-              [class]="{ mine: msg.isMine, theirs: !msg.isMine }"
-            >
-              <div>
-                {{ msg | decryptMessage | async }}
-              </div>
-              <div class="bubble-footer">
-                <div></div>
-                <div class="message-status">
-                  <span class="opacity-60">{{
-                    msg.createdAt | date: 'shortTime' : '' : locale()
-                  }}</span>
-                  @if (msg.isMine) {
-                    <mat-icon
-                      class="m-l-2"
-                      [class]="msg.status === 'read' ? 'opacity-80' : 'opacity-60'"
-                    >
-                      @if (msg.status === 'pending') {
-                        schedule
-                      } @else if (msg.status === 'accepted') {
-                        check
-                      } @else if (msg.status === 'delivered') {
-                        done_all
-                      } @else if (msg.status === 'read') {
-                        done_all
-                      } @else {
-                        help_outline
-                      }
-                    </mat-icon>
-                  }
+            <div class="message-row" [class.mine]="msg.isMine" [class.theirs]="!msg.isMine">
+              @if (isGroupConversation() && !msg.isMine) {
+                @let avatar = messageAvatar(msg.senderId);
+                @if (avatar) {
+                  <img
+                    [src]="avatar"
+                    class="avatar -small group-message-avatar"
+                    alt="sender avatar"
+                    referrerpolicy="no-referrer"
+                  />
+                } @else {
+                  <div class="avatar -small default-avatar group-message-avatar"></div>
+                }
+              }
+
+              <div
+                class="message-bubble"
+                [appObserveVisibility]="!msg.isMine && msg.status !== 'read'"
+                (visible)="onMessageVisible(msg)"
+                [class.mine]="msg.isMine"
+                [class.theirs]="!msg.isMine"
+              >
+                <div>{{ msg | decryptMessage | async }}</div>
+                <div class="bubble-footer">
+                  <div></div>
+                  <div class="message-status">
+                    <span class="opacity-60">{{
+                      msg.createdAt | date: 'shortTime' : '' : locale()
+                    }}</span>
+                    @if (msg.isMine) {
+                      <mat-icon
+                        class="m-l-2"
+                        [class]="msg.status === 'read' ? 'opacity-80' : 'opacity-60'"
+                      >
+                        @if (msg.status === 'pending') {
+                          schedule
+                        } @else if (msg.status === 'accepted') {
+                          check
+                        } @else if (msg.status === 'delivered') {
+                          done_all
+                        } @else if (msg.status === 'read') {
+                          done_all
+                        } @else {
+                          help_outline
+                        }
+                      </mat-icon>
+                    }
+                  </div>
                 </div>
               </div>
             </div>

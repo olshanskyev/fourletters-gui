@@ -11,7 +11,7 @@ import { GroupMember } from './groupMember';
 
 
 /**
- * A group conversation. The Server owns the roster; messages are sent as one independent 1:1 copy per member, so the Server never holds any group key material.
+ * A group conversation.
  */
 export interface Group { 
     /**

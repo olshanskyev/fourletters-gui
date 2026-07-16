@@ -92,6 +92,10 @@ export class ConversationsService {
     await this.repository.putConversation(existing);
   }
 
+  async adjustUnreadCount(id: string, delta: number): Promise<void> {
+    await this.repository.adjustUnreadCount(id, delta);
+  }
+
   // ---- internal helpers ------------------------------------------------------------------
 
   private async findDirectConversationWith(peerId: string): Promise<LocalConversation | undefined> {

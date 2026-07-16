@@ -30,9 +30,19 @@
            } @else {
             <div class="avatar default-avatar"></div>
            }
-          <div class="d-flex flex-col m-l-16 min-w-0">
-            <span class="f-w-600 ellipsis">{{ chat.title }}</span>
-            <span class="f-s-14 ellipsis">{{ chat.lastMessageText || 'No messages yet' }}</span>
+          <div class="d-flex flex-col m-l-16 w-full">
+            <div class="d-flex justify-content-between align-items-center gap-8">
+              <span class="f-w-600 ellipsis">{{ chat.title }}</span>
+              @if (chat.lastMessageAt) {
+                <span class="f-s-12">{{ chat.lastMessageAt | date: 'shortTime' : '' : locale() }}</span>
+              }
+            </div>
+            <div class="d-flex justify-content-between align-items-center gap-8">
+              <span class="f-s-14 ellipsis">{{ chat.lastMessageText || 'No messages yet' }}</span>
+              @if (chat.unreadCount > 0) {
+                <span class="unread-badge">{{ chat.unreadCount }}</span>
+              }
+            </div>
           </div>
         </div>
       }

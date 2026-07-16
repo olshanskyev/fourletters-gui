@@ -77,24 +77,24 @@
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%239e9e9e"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>');
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 32px;
 }
 
 .avatar {
   --avatar-size: 48px;
+  --background-size: 32px;
 
   width: var(--avatar-size) !important;
   min-width: var(--avatar-size) !important;
   height: var(--avatar-size) !important;
   object-fit: cover;
   background-color: var(--mat-sys-surface-container-highest);
+  background-size: var(--background-size);
   border-radius: 50%;
 }
 
 .avatar.-small {
   --avatar-size: 32px;
-
-  background-color: transparent;
+  --background-size: 24px;
 }
 
 .invite-dialog {

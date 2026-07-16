@@ -49,6 +49,7 @@ app-chat-layout {
   max-width: 80%;
   padding: 0.25rem 0.5rem;
   overflow-wrap: break-word;
+  white-space: pre-wrap;
   border-radius: var(--mat-sys-corner-large);
 
   .opacity-60 {
@@ -60,14 +61,12 @@ app-chat-layout {
   }
 
   &.mine {
-    align-self: flex-end;
     color: var(--mat-sys-on-primary);
     background-color: var(--mat-sys-primary);
     border-bottom-right-radius: 0;
   }
 
   &.theirs {
-    align-self: flex-start;
     color: var(--mat-sys-on-secondary);
     background-color: var(--mat-sys-secondary);
     border-bottom-left-radius: 0;
@@ -90,6 +89,25 @@ app-chat-layout {
     }
   }
 
+}
+
+.message-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+
+  &.mine {
+    justify-content: flex-end;
+  }
+
+  &.theirs {
+    justify-content: flex-start;
+  }
+}
+
+.group-message-avatar {
+  flex-shrink: 0;
+  margin-bottom: 0.25rem;
 }
 
 .notification-container {
