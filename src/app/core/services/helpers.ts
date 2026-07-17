@@ -65,3 +65,27 @@ export function filterObject<T extends Record<string, unknown>>(obj: T) {
 export function isEmptyObject(obj: Record<string, any>) {
   return Object.keys(obj).length === 0;
 }
+
+/**
+ * De-duplicates concurrent async calls that share a key: while a task for a given key is in flight,
+ * subsequent calls with the same key return the same pending promise instead of starting a new one.
+ * Once it settles (resolve or reject) the entry is cleared, so the next call starts fresh.
+ *
+ * Useful for collapsing redundant network fetches when several callers request the same resource at
+ * once (e.g. a conversations list and a chat header both resolving the same group).
+ */
+export class InFlightRequests<K = string> {
+  private readonly inFlight = new Map<K, Promise<unknown>>();
+
+  /** Run `task` for `key`, sharing an already-running call for the same key if one exists. */
+  run<T>(key: K, task: () => Promise<T>): Promise<T> {
+    const existing = this.inFlight.get(key) as Promise<T> | undefined;
+    if (existing) {
+      return existing;
+    }
+    const pending = task().finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, pending);
+    return pending;
+  }
+}
+

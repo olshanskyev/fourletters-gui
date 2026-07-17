@@ -7,7 +7,7 @@
 
 <div class="sliding-panel"
   [class.slide-in]="step() === 'groupInfo'">
-  <app-group-info [(groupName)]="groupName" />
+  <app-group-info [(groupName)]="groupName" [(avatarUrl)]="avatarUrl" />
   <button matFab class="action-button" (click)="createGroup()" [hidden]="groupName() === ''">
     <mat-icon>arrow_forward</mat-icon>
   </button>

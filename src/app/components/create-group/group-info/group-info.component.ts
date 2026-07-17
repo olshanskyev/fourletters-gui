@@ -1,10 +1,7 @@
 import {
   Component,
   inject,
-  resource,
-  input,
   model,
-  signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -16,6 +13,7 @@ import { MatInputModule } from '@angular/material/input';
 import { ListLayoutComponent } from '@layouts/list-layout/list-layout.component';
 import { MasterViewService } from '@core/services/shared/master-view.service';
 import { TextFieldModule } from '@angular/cdk/text-field';
+import { AvatarPicker } from '@components/widgets/avatar-picker';
 
 @Component({
   selector: 'app-group-info',
@@ -31,10 +29,12 @@ import { TextFieldModule } from '@angular/cdk/text-field';
     MatInputModule,
     ListLayoutComponent,
     TextFieldModule,
+    AvatarPicker,
   ],
 })
 export class GroupInfoComponent {
   groupName = model<string>('');
+  avatarUrl = model<string | undefined>(undefined);
 
   private masterViewService = inject(MasterViewService);
 

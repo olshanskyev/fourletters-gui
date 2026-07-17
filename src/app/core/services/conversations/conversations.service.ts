@@ -125,7 +125,7 @@ export class ConversationsService {
     if (c.kind === 'group' && c.groupId) {
       const group = await this.groupsService.getGroup(c.groupId);
       return group
-        ? { ...base, title: group.name, participants: group.members }
+        ? { ...base, title: group.name, avatarUrl: group.avatarUrl, participants: group.members }
         : { ...base, title: 'Group', participants: [] };
     }
 
@@ -135,7 +135,7 @@ export class ConversationsService {
         ? {
             ...base,
             title: profile.localName || profile.username || 'Unknown Contact',
-            avatarUrl: profile.avatarUrl,
+            avatarUrl: profile.localAvatarUrl || profile.avatarUrl,
             participants: [c.peerId]
           }
         : { ...base, title: 'Unknown Contact', participants: [c.peerId] };

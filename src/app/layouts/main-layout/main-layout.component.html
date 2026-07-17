@@ -8,7 +8,9 @@
         [autoFocus]="false"
     >
         @if (sidePanelService.component()) {
-            <ng-container *ngComponentOutlet="sidePanelService.component()!" />
+            <ng-container
+                *ngComponentOutlet="sidePanelService.component()!; inputs: sidePanelService.componentInputs()"
+            />
         }
     </mat-sidenav>
 

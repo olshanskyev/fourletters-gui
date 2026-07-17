@@ -30,6 +30,7 @@ export * from './receiptEvent';
 export * from './receiptType';
 export * from './refreshError';
 export * from './signedPreKey';
+export * from './updateGroupRequest';
 export * from './updateMembersRequest';
 export * from './userBatchResponse';
 export * from './userResponse';

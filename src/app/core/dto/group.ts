@@ -31,6 +31,10 @@ export interface Group {
      */
     members: GroupMember[];
     /**
+     * Group avatar image as a base64 data URL, if set.
+     */
+    avatarUrl?: string;
+    /**
      * Epoch milliseconds when the group was created.
      */
     createdAt?: number;

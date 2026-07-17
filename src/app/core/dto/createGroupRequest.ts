@@ -21,5 +21,9 @@ export interface CreateGroupRequest {
      * Initial member user ids (the owner is added automatically if omitted).
      */
     members: string[];
+    /**
+     * Optional group avatar image as a base64 data URL.
+     */
+    avatarUrl?: string;
 }
 

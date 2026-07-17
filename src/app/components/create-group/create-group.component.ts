@@ -27,6 +27,7 @@ export class CreateGroupComponent {
   // Model containing the IDs of the selected contacts
   invitedUsers = signal<string[]>([]);
   groupName = signal<string>('');
+  avatarUrl = signal<string | undefined>(undefined);
   step = signal<'contacts' | 'groupInfo'>('contacts');
 
   private usersService = inject(UsersService);
@@ -47,7 +48,11 @@ export class CreateGroupComponent {
   }
 
   private async submitGroup(): Promise<void> {
-    const group = await this.groupsService.createGroup(this.groupName(), this.invitedUsers());
+    const group = await this.groupsService.createGroup(
+      this.groupName(),
+      this.invitedUsers(),
+      this.avatarUrl()
+    );
     await this.conversationsService.ensureGroupConversation(group.id);
     this.masterViewService.setView('conversations');
   }

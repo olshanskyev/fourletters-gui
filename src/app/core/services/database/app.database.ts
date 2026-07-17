@@ -22,6 +22,7 @@ export interface UserProfileRecord {
   username?: string;
   avatarUrl?: string;
   localName?: string; // fallback customizable local name
+  localAvatarUrl?: string; // local avatar override (base64 data URL); preferred over avatarUrl
   updatedAt: number; // epoch ms
 }
 
@@ -37,6 +38,7 @@ export interface GroupRecord {
   name: string;
   ownerId: string;
   members: string[]; // roster user ids
+  avatarUrl?: string; // group avatar (base64 data URL), server-owned
   epoch?: number; // server-authoritative Sender-Key epoch (bumped on member removal)
   updatedAt: number; // epoch ms
 }

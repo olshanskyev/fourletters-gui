@@ -6,6 +6,7 @@ import {
   CreateGroupRequest,
   Group,
   GroupSummary,
+  UpdateGroupRequest,
   UpdateMembersRequest
 } from '@dto/models';
 
@@ -33,6 +34,11 @@ export class GroupsApiService {
   /** Owner-only: add/remove members. */
   updateMembers(groupId: string, request: UpdateMembersRequest): Observable<Group> {
     return this.httpClient.patch<Group>(`/groups/${groupId}/members`, request);
+  }
+
+  /** Owner-only: partially update group metadata (name and/or avatar). */
+  updateGroup(groupId: string, request: UpdateGroupRequest): Observable<Group> {
+    return this.httpClient.patch<Group>(`/groups/${groupId}`, request);
   }
 
   /** Remove the caller from the group. */

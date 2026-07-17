@@ -11,6 +11,8 @@ import { MasterViewService } from '@core/services/shared/master-view.service';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { InviteDialogComponent } from '@components/dialogs/invite-dialog/invite-dialog.component';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { UsersList } from '@components/widgets/users-list';
+
 
 @Component({
   selector: 'app-contacts',
@@ -25,6 +27,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
     MatIconModule,
     MatCheckboxModule,
     MatDialogModule,
+    UsersList
   ],
 })
 export class ContactsComponent {
@@ -37,9 +40,7 @@ export class ContactsComponent {
   private readonly dialog = inject(MatDialog);
 
   private usersService = inject(UsersService);
-  private conversationsService = inject(ConversationsService);
   private masterViewService = inject(MasterViewService);
-  private router = inject(Router);
   contacts = resource({
     loader: () => this.usersService.getContactList(),
   });
@@ -52,33 +53,5 @@ export class ContactsComponent {
     this.dialog.open(InviteDialogComponent, {
       panelClass: 'invite-dialog',
     });
-  }
-
-  async handleContactClick(userId: string) {
-    if (this.selectionMode()) {
-      this.toggleSelection(userId);
-    } else {
-      await this.openChat(userId);
-    }
-  }
-
-  toggleSelection(userId: string) {
-    const current = this.selectedContacts();
-    if (current.includes(userId)) {
-      this.selectedContacts.set(current.filter((id) => id !== userId));
-    } else {
-      this.selectedContacts.set([...current, userId]);
-    }
-  }
-
-  async openChat(userId: string) {
-    try {
-      const conversationId = await this.conversationsService.ensureDirectConversation(userId);
-      this.router.navigate(['/m', conversationId]);
-      // Optional: switch back to conversations view when navigating to chat.
-      this.masterViewService.setView('conversations');
-    } catch (e) {
-      console.error('Failed to open chat with contact', e);
-    }
   }
 }

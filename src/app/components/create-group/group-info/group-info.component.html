@@ -8,6 +8,13 @@
     </div>
   </div>
   <div body class="p-y-4 p-x-4">
+    <div class="d-flex flex-col align-items-center p-y-8">
+      <app-avatar-picker
+        [avatarUrl]="avatarUrl()"
+        (avatarSelected)="avatarUrl.set($event)"
+      />
+    </div>
+
     <div class="p-16">
       <mat-form-field class="w-full" appearance="outline" subscriptSizing="dynamic">
           <mat-label>Group Name</mat-label>

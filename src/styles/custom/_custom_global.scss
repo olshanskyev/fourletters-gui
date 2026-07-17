@@ -81,7 +81,7 @@
 
 .avatar {
   --avatar-size: 48px;
-  --background-size: 32px;
+  --background-size: 36px;
 
   width: var(--avatar-size) !important;
   min-width: var(--avatar-size) !important;
@@ -95,6 +95,11 @@
 .avatar.-small {
   --avatar-size: 32px;
   --background-size: 24px;
+}
+
+.avatar.-large {
+  --avatar-size: 128px;
+  --background-size: 96px;
 }
 
 .invite-dialog {

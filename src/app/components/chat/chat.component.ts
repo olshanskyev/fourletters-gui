@@ -87,7 +87,10 @@ export class ChatComponent {
     params: () => this.groupSenderIds(),
     loader: async ({ params: senderIds }) => {
       const profiles = await Promise.all(senderIds.map((id) => this.usersService.getProfile(id)));
-      return Object.fromEntries(senderIds.map((id, i) => [id, profiles[i]?.avatarUrl]));
+      return Object.fromEntries(senderIds.map((id, i) => [
+        id,
+        profiles[i]?.localAvatarUrl || profiles[i]?.avatarUrl
+      ]));
     },
   });
 
@@ -109,7 +112,9 @@ export class ChatComponent {
   messageText = signal<string>('');
 
   openChatDetails() {
-    this.sidePanelService.open(ChatDetailsComponent);
+    this.sidePanelService.open(ChatDetailsComponent, {
+      conversationView: this.conversation.value(),
+    });
   }
 
   async sendMessage() {

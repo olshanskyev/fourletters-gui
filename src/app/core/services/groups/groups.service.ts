@@ -1,10 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, Observable } from 'rxjs';
 
 import {
   CreateGroupRequest,
   Group,
   GroupSummary,
+  UpdateGroupRequest,
   UpdateMembersRequest
 } from '@dto/models';
 import { GroupRecord } from '@core/services/database/app.database';
@@ -12,6 +13,7 @@ import { GroupsApiService } from './groups-api.service';
 import { GroupsRepository } from './groups.repository';
 import { staleWhileRevalidate } from '@core/services/cache/swr-cache';
 import { GroupKeyStore } from '@core/services/crypto/group';
+import { InFlightRequests } from '../helpers';
 
 @Injectable({
   providedIn: 'root'
@@ -21,25 +23,38 @@ export class GroupsService {
   private groupsRepo = inject(GroupsRepository);
   private groupKeys = inject(GroupKeyStore);
 
+  /** In-flight group fetches, keyed by groupId, to collapse concurrent requests into one. */
+  private readonly inFlightFetches = new InFlightRequests<string>();
+
   private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   /**
-   * Retrieves a group. Uses Stale-While-Revalidate caching strategy.
-   * Returns immediately if cached, but fetches in background if stale.
+   * Retrieves a group, cache-first (SWR): returns the cached record immediately and only hits the
+   * server when the cache is missing or stale.
    */
-  getGroup(groupId: string, forceRefresh = false): Promise<GroupRecord | undefined> {
+  getGroup(groupId: string): Promise<GroupRecord | undefined> {
     return staleWhileRevalidate({
       readCache: () => this.groupsRepo.getGroup(groupId),
-      revalidate: () => this.fetchAndCacheGroup(groupId),
+      revalidate: () => this.fetchGroup(groupId),
       ttlMs: this.CACHE_TTL_MS,
-      forceRefresh,
       onBackgroundError: err => console.error('Background group refresh failed', err)
     });
   }
 
+  /**
+   * Fetch-and-observe a group: forces a server refresh, then streams the local record. The cached
+   * value emits immediately and the refresh's cache write re-emits with the fresh data.
+   */
+  fetchAndObserveGroup(groupId: string): Observable<GroupRecord | undefined> {
+    this.fetchGroup(groupId).catch(err =>
+      console.error('Background group refresh failed', err)
+    );
+    return this.groupsRepo.observeGroup(groupId);
+  }
+
   /** Create a group with the caller as owner. */
-  async createGroup(name: string, memberIds: string[]): Promise<Group> {
-    const request: CreateGroupRequest = { name, members: memberIds };
+  async createGroup(name: string, memberIds: string[], avatarUrl?: string): Promise<Group> {
+    const request: CreateGroupRequest = { name, members: memberIds, avatarUrl };
     const group = await lastValueFrom(this.api.createGroup(request));
 
     await this.persistGroup(group);
@@ -75,6 +90,24 @@ export class GroupsService {
   /** Owner-only: remove members. */
   async removeMembers(groupId: string, removeIds: string[]): Promise<Group> {
     return this.updateRoster(groupId, [], removeIds);
+  }
+
+  /** Owner-only: partially update group metadata (name and/or avatar). */
+  async updateGroup(groupId: string, changes: UpdateGroupRequest): Promise<Group> {
+    const group = await lastValueFrom(this.api.updateGroup(groupId, changes));
+
+    await this.persistGroup(group);
+    return group;
+  }
+
+  /** Owner-only: rename the group. */
+  updateName(groupId: string, name: string): Promise<Group> {
+    return this.updateGroup(groupId, { name });
+  }
+
+  /** Owner-only: set the group avatar (pass an empty string to clear it). */
+  updateAvatar(groupId: string, avatarUrl: string): Promise<Group> {
+    return this.updateGroup(groupId, { avatarUrl });
   }
 
   /** Leave a group and drop its local conversation and metadata. */
@@ -124,12 +157,19 @@ export class GroupsService {
       name: summary.name,
       ownerId: summary.ownerId,
       members: existing?.members ?? [],
+      avatarUrl: existing?.avatarUrl,
       epoch: summary.epoch ?? existing?.epoch ?? 0,
-      updatedAt: 0 // stale: roster is fetched lazily on first getGroup
+      updatedAt: existing?.updatedAt ?? Date.now()
     });
   }
 
-  private async fetchAndCacheGroup(groupId: string): Promise<GroupRecord> {
+  private fetchGroup(groupId: string): Promise<GroupRecord> {
+    // De-duplicate concurrent fetches: several subscribers (e.g. the conversations list and the
+    // chat header) can request the same stale group at once; collapse them into one server call.
+    return this.inFlightFetches.run(groupId, () => this.doFetchGroup(groupId));
+  }
+
+  private async doFetchGroup(groupId: string): Promise<GroupRecord> {
     const group = await lastValueFrom(this.api.getGroup(groupId));
     const record = this.toRecord(group);
     await this.groupsRepo.putGroup(record);
@@ -142,6 +182,7 @@ export class GroupsService {
       name: group.name,
       ownerId: group.ownerId,
       members: group.members.map(m => m.userId),
+      avatarUrl: group.avatarUrl,
       epoch: group.epoch ?? 0,
       updatedAt: Date.now()
     };
