@@ -1,9 +1,14 @@
 export type MessageStatus = 'pending' | 'accepted' | 'delivered' | 'read' | 'failed';
 
 
-export type MessageContentType = 'text';
+export type MessageContentType = 'text' | 'image';
 
-export interface MessageContent { type: 'text'; text: string }
+export interface MessageContent { type: MessageContentType; text: string }
+
+/** Conversation-list preview for a message; images show a placeholder, never the raw data URL. */
+export function messagePreview(contentType: MessageContentType, text: string): string {
+  return contentType === 'image' ? 'Photo' : text;
+}
 
 interface BaseMessage {
   id: string;

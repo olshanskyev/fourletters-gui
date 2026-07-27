@@ -1,7 +1,14 @@
 import { Component, ChangeDetectionStrategy, input, output, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { fileToAvatarDataUrl } from '@core/utils/avatar-image';
+import { compressImageToDataUrl } from '@core/utils/image-compression';
+
+/** Encoding preset for avatars: a small thumbnail kept well under the server field cap. */
+const AVATAR_OPTIONS = {
+  maxDimension: 256,
+  qualitySteps: [0.85, 0.7, 0.55, 0.4],
+  maxDataUrlLength: 200 * 1024,
+};
 
 @Component({
   selector: 'app-avatar-picker',
@@ -82,7 +89,7 @@ export class AvatarPicker {
     this.error.set(undefined);
     this.isProcessing.set(true);
     try {
-      this.avatarSelected.emit(await fileToAvatarDataUrl(file));
+      this.avatarSelected.emit(await compressImageToDataUrl(file, AVATAR_OPTIONS));
     } catch (e) {
       this.error.set(e instanceof Error ? e.message : 'Failed to process the picture.');
     } finally {

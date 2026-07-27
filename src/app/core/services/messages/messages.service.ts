@@ -1,6 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
-import { LocalMessage, MessageContent, MessageContentType, SystemMessage } from './models/messages.model';
+import {
+  LocalMessage,
+  MessageContent,
+  MessageContentType,
+  SystemMessage,
+  messagePreview
+} from './models/messages.model';
 import { Observable, Subscription, lastValueFrom, concatMap } from 'rxjs';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { ContactsService } from '@core/services/contacts/contacts.service';
@@ -225,7 +231,9 @@ export class MessagesService {
     await this.saveIncomingMessage(
       encryptedMessage, conversationId, ciphertextAtRest, content.type, createdAt, ts, receivedAt
     );
-    await this.conversationsService.updateLastMessage(conversationId, content.text, createdAt);
+    await this.conversationsService.updateLastMessage(
+      conversationId, messagePreview(content.type, content.text), createdAt
+    );
     await this.conversationsService.adjustUnreadCount(conversationId, 1);
     await this.sendReceipt(messageId, senderId, ReceiptType.Delivered);
   }
@@ -331,8 +339,12 @@ export class MessagesService {
     return this.repository.getMessagesByConversation(conversationId);
   }
 
-  async sendMessage(conversationId: string, text: string): Promise<void> {
-    return this.outboxService.sendMessage(conversationId, text);
+  async sendMessage(
+    conversationId: string,
+    text: string,
+    contentType: MessageContentType = 'text'
+  ): Promise<void> {
+    return this.outboxService.sendMessage(conversationId, text, contentType);
   }
 
   /**

@@ -1,6 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
-import { LocalMessage, DirectMessage, GroupMessage } from './models/messages.model';
+import {
+  LocalMessage,
+  DirectMessage,
+  GroupMessage,
+  MessageContentType,
+  messagePreview
+} from './models/messages.model';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { MessagesApiService } from './messages-api.service';
 import { SyncStateRepository } from './sync-state.repository';
@@ -25,7 +31,8 @@ export class OutboxService {
 
   async sendMessage(
     conversationId: string,
-    text: string ): Promise<void> {
+    text: string,
+    contentType: MessageContentType = 'text' ): Promise<void> {
 
     const convo = await this.conversationsService.getConversation(conversationId);
     if (!convo) {
@@ -48,7 +55,7 @@ export class OutboxService {
       conversationId: convo.id,
       senderId: 'me', // Placeholder, real senderId the server calculates based on auth
       text: await this.secureMsg.encryptForAtRest(id, text),
-      contentType: 'text',
+      contentType,
       isMine: true,
       createdAt: time,
       status: 'pending',
@@ -56,7 +63,7 @@ export class OutboxService {
     };
 
     // Persist before transmitting so a send/encrypt failure can be marked for manual resend.
-    await this.persistOutgoing(message, text, time);
+    await this.persistOutgoing(message, messagePreview(contentType, text), time);
 
     try {
       const res = await this.dispatch(message);
@@ -110,7 +117,7 @@ export class OutboxService {
     try {
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
       const { payload } = await this.secureMsg.buildOutgoingPayload(
-        targetId, plaintext, msg.createdAt, true
+        targetId, plaintext, msg.createdAt, true, msg.contentType ?? 'text'
       );
       msg.cipher = payload;
       nackResent.add(targetId);
@@ -139,7 +146,7 @@ export class OutboxService {
       try {
         const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
         const { payload } = await this.secureMsg.buildGroupRedeliveryPayload(
-          memberId, msg.groupId, plaintext, msg.createdAt
+          memberId, msg.groupId, plaintext, msg.createdAt, msg.contentType ?? 'text'
         );
         await lastValueFrom(this.messagesApi.sendMessage(memberId, payload));
         nackResent.add(memberId);
@@ -369,7 +376,7 @@ export class OutboxService {
     if (!payload) {
       const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
       payload = (await this.secureMsg.buildGroupPayload(
-        groupId, epoch, plaintext, msg.createdAt)
+        groupId, epoch, plaintext, msg.createdAt, msg.contentType ?? 'text')
       ).payload;
       msg.epoch = epoch;
       msg.cipher = payload;
@@ -420,7 +427,7 @@ export class OutboxService {
     }
     const plaintext = await this.secureMsg.decryptFromAtRest(msg.id, msg.text);
     const { payload } = await this.secureMsg.buildOutgoingPayload(
-      recipientId, plaintext, msg.createdAt
+      recipientId, plaintext, msg.createdAt, false, msg.contentType ?? 'text'
     );
     msg.cipher = payload;
     return payload;

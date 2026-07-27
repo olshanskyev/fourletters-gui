@@ -21,12 +21,21 @@ import { DecryptMessagePipe } from './decrypt-message.pipe';
 import { MessagesService } from '@core/services/messages/messages.service';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { UsersService } from '@core/services/users/users.service';
+import { MatMenuModule } from '@angular/material/menu';
+import { compressImageToDataUrl } from '@core/utils/image-compression';
 
 interface DaySection {
   id: string;
   date: number;
   messages: LocalMessage[];
 }
+
+/** Encoding preset for chat photos: a larger edge and single quality, capped near the server limit. */
+const PHOTO_OPTIONS = {
+  maxDimension: 1280,
+  qualitySteps: [0.7],
+  maxDataUrlLength: 10 * 1024 * 1024,
+};
 
 @Component({
   selector: 'app-chat',
@@ -46,7 +55,8 @@ interface DaySection {
     RouterLink,
     ObserveVisibilityDirective,
     DecryptMessagePipe,
-    TranslateModule
+    TranslateModule,
+    MatMenuModule
   ],
 })
 export class ChatComponent {
@@ -153,6 +163,21 @@ export class ChatComponent {
 
   }
 
+  async onPhotoSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-picking the same file
+    const convoId = this.conversationId();
+    if (!file || !convoId) return;
+
+    try {
+      const dataUrl = await compressImageToDataUrl(file, PHOTO_OPTIONS);
+      await this.messagesService.sendMessage(convoId, dataUrl, 'image');
+    } catch (e) {
+      console.error('Failed to send photo', e);
+    }
+  }
+
   onMessageVisible(msg: LocalMessage) {
     if (!msg.isMine && msg.status !== 'read') {
       // Queue for a batched read receipt (see readQueue).
@@ -166,6 +191,17 @@ export class ChatComponent {
 
   messageSenderName(senderId: string): string | undefined {
     return this.profilesResource.value()?.[senderId]?.name;
+  }
+
+  /** Data URL of the image shown full-size in the lightbox, or undefined when closed. */
+  previewImage = signal<string | undefined>(undefined);
+
+  openImagePreview(src: string): void {
+    this.previewImage.set(src);
+  }
+
+  closeImagePreview(): void {
+    this.previewImage.set(undefined);
   }
 }
 

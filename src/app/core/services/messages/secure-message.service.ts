@@ -78,9 +78,10 @@ export class SecureMessageService {
     recipientId: string,
     plaintext: string,
     ts: number,
-    forceNewSession = false
+    forceNewSession = false,
+    ct: MessageContentType = 'text'
   ): Promise<{ payload: string }> {
-    const envelope: PairwiseEnvelope = { t: 'chat', b: this.textBody(ts, plaintext) };
+    const envelope: PairwiseEnvelope = { t: 'chat', b: this.contentBody(ts, ct, plaintext) };
     return { payload: await this.encryptPairwise(recipientId, envelope, forceNewSession) };
   }
 
@@ -103,9 +104,10 @@ export class SecureMessageService {
     recipientId: string,
     groupId: string,
     plaintext: string,
-    ts: number
+    ts: number,
+    ct: MessageContentType = 'text'
   ): Promise<{ payload: string }> {
-    const envelope: PairwiseEnvelope = { t: 'grp', g: groupId, b: this.textBody(ts, plaintext) };
+    const envelope: PairwiseEnvelope = { t: 'grp', g: groupId, b: this.contentBody(ts, ct, plaintext) };
     return { payload: await this.encryptPairwise(recipientId, envelope, true) };
   }
 
@@ -114,10 +116,11 @@ export class SecureMessageService {
     groupId: string,
     epoch: number,
     plaintext: string,
-    ts: number
+    ts: number,
+    ct: MessageContentType = 'text'
   ): Promise<{ payload: string }> {
     const payload = await this.groupCipher.encrypt(
-      groupId, epoch, JSON.stringify(this.textBody(ts, plaintext))
+      groupId, epoch, JSON.stringify(this.contentBody(ts, ct, plaintext))
     );
     return { payload };
   }
@@ -165,16 +168,17 @@ export class SecureMessageService {
     return this.contentFromBody(candidate);
   }
 
-  /** Wrap chat text in the shared content envelope (sender time + content type). */
-  private textBody(ts: number, text: string): ChatBody {
-    return { ts, ct: 'text', x: text };
+  /** Wrap chat content in the shared envelope (sender time + content type). */
+  private contentBody(ts: number, ct: MessageContentType, x: string): ChatBody {
+    return { ts, ct, x };
   }
 
   private contentFromBody(body: unknown): DecodedContent {
     if (this.isChatBody(body)) {
       const ts = typeof body.ts === 'number' ? body.ts : undefined;
-      // Only 'text' exists today; unknown content types degrade to text so nothing is lost.
-      return { content: { type: 'text', text: body.x }, ts };
+      // Preserve known content types; anything unrecognized degrades to text so nothing is lost.
+      const type: MessageContentType = body.ct === 'image' ? 'image' : 'text';
+      return { content: { type, text: body.x }, ts };
     }
     console.error('Unexpected message body; cannot parse content', body);
     return { content: { type: 'text', text: '' } };

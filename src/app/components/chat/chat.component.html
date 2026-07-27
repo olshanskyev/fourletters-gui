@@ -74,8 +74,21 @@
                     (visible)="onMessageVisible(msg)"
                     [class.mine]="msg.isMine"
                     [class.theirs]="!msg.isMine"
+                    [class.has-image]="msg.contentType === 'image'"
                   >
-                    <div>{{ msg | decryptMessage | async }}</div>
+                    @if (msg.contentType === 'image') {
+                      @let src = msg | decryptMessage | async;
+                      @if (src) {
+                        <img
+                          [src]="src"
+                          class="message-image"
+                          alt="photo"
+                          (click)="openImagePreview(src)"
+                        />
+                      }
+                    } @else {
+                      <div>{{ msg | decryptMessage | async }}</div>
+                    }
                     <div class="bubble-footer">
                       <div></div>
                       <div class="message-status">
@@ -121,7 +134,29 @@
 
   @if (conversationId()) {
     <div bottom class="chat-bottom">
+
+      <mat-menu #menu="matMenu">
+
+        <button mat-menu-item (click)="photoInput.click()">
+          <mat-icon>photo</mat-icon>
+          <span>Photo</span>
+        </button>
+      </mat-menu>
+
+      <input
+        #photoInput
+        type="file"
+        accept="image/*"
+        hidden
+        (change)="onPhotoSelected($event)"
+      />
+
       <mat-form-field class="w-full message-input transparent-background" appearance="outline" subscriptSizing="dynamic">
+        <button matPrefix matIconButton class="m-l-4"
+          [matMenuTriggerFor]="menu"
+        >
+          <mat-icon>attach_file</mat-icon>
+        </button>
         <textarea
           matInput
           rows="1"
@@ -139,3 +174,12 @@
     </div>
   }
 </app-chat-layout>
+
+@if (previewImage(); as src) {
+  <div class="image-lightbox" (click)="closeImagePreview()">
+    <button matIconButton class="lightbox-close" aria-label="Close" (click)="closeImagePreview()">
+      <mat-icon>close</mat-icon>
+    </button>
+    <img [src]="src" class="lightbox-image" alt="photo" (click)="$event.stopPropagation()" />
+  </div>
+}
