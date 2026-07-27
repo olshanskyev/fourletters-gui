@@ -159,7 +159,7 @@ export class GroupsService {
       members: existing?.members ?? [],
       avatarUrl: existing?.avatarUrl,
       epoch: summary.epoch ?? existing?.epoch ?? 0,
-      updatedAt: existing?.updatedAt ?? Date.now()
+      updatedAt: existing?.updatedAt ?? 0
     });
   }
 

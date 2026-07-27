@@ -25,6 +25,15 @@ export class ConversationsService {
   }
 
   /**
+   * Observe the total unread count across all conversations. Used to drive the app icon badge.
+   */
+  observeTotalUnread(): Observable<number> {
+    return this.repository.observeConversationsProjected(conversations =>
+      Promise.resolve(conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0))
+    );
+  }
+
+  /**
    * Observe a single conversation's view-model by ID. Re-emits live when the conversation or its
    * cached profile/group metadata changes (e.g. a renamed contact), keeping the chat header current.
    */
@@ -39,6 +48,12 @@ export class ConversationsService {
    */
   async getConversation(id: string): Promise<LocalConversation | undefined> {
     return this.repository.getConversation(id);
+  }
+
+  /** One-shot resolve of a conversation's display view-model (title/avatar) by ID. */
+  async getConversationView(id: string): Promise<ConversationView | undefined> {
+    const conversation = await this.repository.getConversation(id);
+    return conversation ? this.toView(conversation) : undefined;
   }
 
   /** Remove a conversation locally (e.g. after leaving a group). */

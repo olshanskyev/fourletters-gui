@@ -83,7 +83,10 @@
                           [src]="src"
                           class="message-image"
                           alt="photo"
+                          role="button"
+                          tabindex="0"
                           (click)="openImagePreview(src)"
+                          (keydown.enter)="openImagePreview(src)"
                         />
                       }
                     } @else {
@@ -176,10 +179,16 @@
 </app-chat-layout>
 
 @if (previewImage(); as src) {
-  <div class="image-lightbox" (click)="closeImagePreview()">
+  <div class="image-lightbox">
+    <button
+      type="button"
+      class="lightbox-backdrop"
+      aria-label="Close preview"
+      (click)="closeImagePreview()"
+    ></button>
     <button matIconButton class="lightbox-close" aria-label="Close" (click)="closeImagePreview()">
       <mat-icon>close</mat-icon>
     </button>
-    <img [src]="src" class="lightbox-image" alt="photo" (click)="$event.stopPropagation()" />
+    <img [src]="src" class="lightbox-image" alt="photo" />
   </div>
 }

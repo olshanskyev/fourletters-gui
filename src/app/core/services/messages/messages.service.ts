@@ -10,6 +10,8 @@ import {
 import { Observable, Subscription, lastValueFrom, concatMap } from 'rxjs';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { ContactsService } from '@core/services/contacts/contacts.service';
+import { UsersService } from '@core/services/users/users.service';
+import { PushService } from '@core/services/push/push.service';
 import { HubService } from './ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
 import { OutboxService } from './outbox.service';
@@ -17,6 +19,13 @@ import { ReceiptType, EncryptedMessage, ReceiptData, DeliveryReceipt } from '@dt
 import { SyncStateRepository } from './sync-state.repository';
 import { SecureMessageService, UndecryptableError } from './secure-message.service';
 import { GroupUndecryptableError } from '@core/services/crypto/group';
+
+/** A receipt we owe the sender, queued so a whole batch can be acknowledged in one request. */
+interface PendingReceipt {
+  messageId: string;
+  senderId: string;
+  type: ReceiptType;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -28,6 +37,8 @@ export class MessagesService {
   private repository = inject(MessagesRepository);
   private conversationsService = inject(ConversationsService);
   private contactsService = inject(ContactsService);
+  private usersService = inject(UsersService);
+  private pushService = inject(PushService);
   private hubService = inject(HubService);
   private messagesApi = inject(MessagesApiService);
   private outboxService = inject(OutboxService);
@@ -39,6 +50,7 @@ export class MessagesService {
   private readSubscription?: Subscription;
   private undecryptableSubscription?: Subscription;
   private keyChangedSubscription?: Subscription;
+  private connectedSubscription?: Subscription;
 
   /**
    * Connect to the Hub and start handling incoming live messages. Idempotent.
@@ -54,7 +66,8 @@ export class MessagesService {
     // init subscriptions to live events from the Hub
     this.incomingSubscription = this.hubService.messages.pipe(
       concatMap(async (encryptedMessage) => {
-        await this.processIncomingMessage(encryptedMessage);
+        const receipts = await this.processIncomingMessage(encryptedMessage);
+        await this.flushReceipts(receipts);
       })
     ).subscribe();
 
@@ -88,47 +101,65 @@ export class MessagesService {
       })
     ).subscribe();
 
-    // async initialization
-    (async () => {
-      try {
-        // Sync inbox at startup
-        const res = await lastValueFrom(this.messagesApi.fetchInbox());
-        if (res.serverStartedAt) {
-          await this.syncState.setServerStartedAt(res.serverStartedAt);
+    // Re-sync the inbox on every reconnection so messages queued while the app was backgrounded
+    // The first connection is skipped here because the explicit startup sync already covers it.
+    let isFirstConnect = true;
+    this.connectedSubscription = this.hubService.connected.pipe(
+      concatMap(async () => {
+        if (isFirstConnect) {
+          isFirstConnect = false;
+          return;
         }
+        await this.syncInbox();
+      })
+    ).subscribe();
 
-        // Save unread messages from inbox. Process 1:1 messages (which include Sender Key
-        // Distribution Messages) BEFORE group messages, so a group message never fails to decrypt
-        // just because its Sender Key arrived in the same batch.
-        const inbox = res.messages || [];
-        const direct = inbox.filter(m => !(m as any).groupId);
-        const group = inbox.filter(m => (m as any).groupId);
-        for (const encryptedMessage of [...direct, ...group]) {
-          await this.processIncomingMessage(encryptedMessage);
-        }
+    // Initial sync + outbox resync.
+    void this.syncInbox();
+    try {
+      this.outboxService.resync();
+    } catch (err) {
+      console.error('Failed to resync outbox messages after startup:', err);
+    }
+  }
 
-        // Process receipts for messages we sent that were delivered/read while we were offline
-        for (const receipt of res.receipts || []) {
-          if (!(await this.checkReceiptSignature(receipt))) {
-            console.warn('Invalid receipt signature dropped', receipt);
-          } else if (receipt.type === ReceiptType.Undecryptable) {
-            await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
-          } else {
-            await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to sync inbox:', err);
+  /**
+   * Pull the server inbox and process any messages/receipts we missed while offline or suspended.
+   * Runs at startup and again on each hub reconnection.
+   */
+  private async syncInbox(): Promise<void> {
+    try {
+      const res = await lastValueFrom(this.messagesApi.fetchInbox());
+      if (res.serverStartedAt) {
+        await this.syncState.setServerStartedAt(res.serverStartedAt);
       }
 
-      try {
-        // Retry undelivered messages if server restarted
-        this.outboxService.resync();
-      } catch (err) {
-        console.error('Failed to resync outbox messages after startup:', err);
+      // Save unread messages from inbox. Process 1:1 messages (which include Sender Key
+      // Distribution Messages) BEFORE group messages, so a group message never fails to decrypt
+      // just because its Sender Key arrived in the same batch.
+      const inbox = res.messages || [];
+      const direct = inbox.filter(m => !(m as any).groupId);
+      const group = inbox.filter(m => (m as any).groupId);
+      // Acknowledge the whole batch in one request instead of one round-trip per message.
+      const pending: PendingReceipt[] = [];
+      for (const encryptedMessage of [...direct, ...group]) {
+        pending.push(...await this.processIncomingMessage(encryptedMessage));
       }
-    })();
+      await this.flushReceipts(pending);
 
+      // Process receipts for messages we sent that were delivered/read while we were offline
+      for (const receipt of res.receipts || []) {
+        if (!(await this.checkReceiptSignature(receipt))) {
+          console.warn('Invalid receipt signature dropped', receipt);
+        } else if (receipt.type === ReceiptType.Undecryptable) {
+          await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
+        } else {
+          await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to sync inbox:', err);
+    }
   }
 
   private async checkReceiptSignature(receipt: ReceiptData): Promise<boolean> {
@@ -137,37 +168,36 @@ export class MessagesService {
     );
   }
 
-  private async processIncomingMessage(encryptedMessage: EncryptedMessage | any) {
+  private async processIncomingMessage(encryptedMessage: EncryptedMessage | any)
+    : Promise<PendingReceipt[]> {
     if (!encryptedMessage.senderId) {
       console.warn('Received encrypted message without a senderId. Dropping message.', encryptedMessage);
-      return;
+      return [];
     }
 
     // De-duplicate: Ensure we don't save the same message again when unioning Hot and Cold tiers.
     // A duplicate means we stored it but the server never got our receipt
     const existing = await this.repository.hasMessage(encryptedMessage.messageId);
     if (existing) {
-      await this.reacknowledgeStored(encryptedMessage.messageId, encryptedMessage.senderId);
-      return;
+      const { messageId, senderId } = encryptedMessage;
+      return [await this.reacknowledgeStored(messageId, senderId)];
     }
 
     const { senderId, messageId, groupId } = encryptedMessage;
 
     try {
-      if (groupId) {
-        await this.processIncomingGroupMessage(encryptedMessage);
-      } else {
-        await this.processIncomingDirectMessage(encryptedMessage);
-      }
+      return groupId
+        ? await this.processIncomingGroupMessage(encryptedMessage)
+        : await this.processIncomingDirectMessage(encryptedMessage);
     } catch (err) {
       if (err instanceof UndecryptableError || err instanceof GroupUndecryptableError) {
         // The signature was valid but we lack a usable key (sealed to a previous device key, or a
         // Sender Key we never received). NACK it so the Server drops our pending copy and the sender
         // re-keys / redistributes; discard it locally.
-        await this.sendReceipt(messageId, senderId, ReceiptType.Undecryptable);
-      } else {
-        console.warn('Failed to process incoming message', messageId, err);
+        return [{ messageId, senderId, type: ReceiptType.Undecryptable }];
       }
+      console.warn('Failed to process incoming message', messageId, err);
+      return [];
     }
   }
 
@@ -176,14 +206,13 @@ export class MessagesService {
    * that silently seeds a peer's group Sender Key.
    */
   private async processIncomingDirectMessage(encryptedMessage: EncryptedMessage | any)
-    : Promise<void> {
+    : Promise<PendingReceipt[]> {
     const { senderId, messageId, payload } = encryptedMessage;
     const content = await this.secureMsg.unpackIncomingPayload(senderId, payload);
 
     if (content.kind === 'skdm') {
       await this.secureMsg.applyDistribution(senderId, content.skdm);
-      await this.sendReceipt(messageId, senderId, ReceiptType.Delivered);
-      return;
+      return [{ messageId, senderId, type: ReceiptType.Delivered }];
     }
 
     if (content.kind === 'group-redelivery') {
@@ -191,11 +220,10 @@ export class MessagesService {
       // copy (new device). It rides in as a 1:1 message but belongs in the group conversation.
       encryptedMessage.groupId = content.groupId;
       encryptedMessage.recipientId = undefined;
-      await this.persistIncoming(encryptedMessage, content.content, content.ts);
-      return;
+      return [await this.persistIncoming(encryptedMessage, content.content, content.ts)];
     }
 
-    await this.persistIncoming(encryptedMessage, content.content, content.ts);
+    return [await this.persistIncoming(encryptedMessage, content.content, content.ts)];
   }
 
   /**
@@ -203,10 +231,10 @@ export class MessagesService {
    * Sender Key throws GroupUndecryptableError, which the caller turns into a NACK.
    */
   private async processIncomingGroupMessage(encryptedMessage: EncryptedMessage | any)
-    : Promise<void> {
+    : Promise<PendingReceipt[]> {
     const { senderId, groupId, payload } = encryptedMessage;
     const { content, ts } = await this.secureMsg.unpackGroupPayload(senderId, groupId, payload);
-    await this.persistIncoming(encryptedMessage, content, ts);
+    return [await this.persistIncoming(encryptedMessage, content, ts)];
   }
 
   /**
@@ -216,7 +244,7 @@ export class MessagesService {
   private async persistIncoming(
     encryptedMessage: EncryptedMessage | any, content: MessageContent, ts?: number
   )
-    : Promise<void> {
+    : Promise<PendingReceipt> {
     const { senderId, messageId } = encryptedMessage;
     const conversationId = await this.resolveIncomingConversation(encryptedMessage);
     const ciphertextAtRest = await this.secureMsg.encryptForAtRest(messageId, content.text);
@@ -235,7 +263,36 @@ export class MessagesService {
       conversationId, messagePreview(content.type, content.text), createdAt
     );
     await this.conversationsService.adjustUnreadCount(conversationId, 1);
-    await this.sendReceipt(messageId, senderId, ReceiptType.Delivered);
+    await this.notifyIfBackground(encryptedMessage, conversationId, content);
+    return { messageId, senderId, type: ReceiptType.Delivered };
+  }
+
+  /**
+   * Raise a local OS notification when a message lands while the app is backgrounded but still
+   * connected to the Hub. The server only sends web-push while a client is disconnected, so this
+   * covers the connected-but-hidden gap. Silent when the app is visible.
+   */
+  private async notifyIfBackground(
+    encryptedMessage: EncryptedMessage | any, conversationId: string, content: MessageContent
+  ): Promise<void> {
+    if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+      return;
+    }
+    const { senderId, groupId } = encryptedMessage;
+    const view = await this.conversationsService.getConversationView(conversationId);
+    if (!view) {
+      return;
+    }
+    const preview = messagePreview(content.type, content.text);
+    let body = preview;
+    if (groupId) {
+      const sender = await this.usersService.getProfile(senderId);
+      const senderName = sender?.localName || sender?.username || 'Someone';
+      body = `${senderName}: ${preview}`;
+    }
+    await this.pushService.showLocalNotification(
+      view.title, body, { senderId, groupId }, view.avatarUrl
+    );
   }
 
   /**
@@ -251,10 +308,10 @@ export class MessagesService {
   /**
    * Re-send the receipt for a message we already have when the server redelivers it
    */
-  private async reacknowledgeStored(messageId: string, senderId: string): Promise<void> {
+  private async reacknowledgeStored(messageId: string, senderId: string): Promise<PendingReceipt> {
     const stored = await this.repository.getMessageById(messageId);
     const type = stored?.status === 'read' ? ReceiptType.Read : ReceiptType.Delivered;
-    await this.sendReceipt(messageId, senderId, type);
+    return { messageId, senderId, type };
   }
 
   /** Sign a receipt of the given type for a received message. */
@@ -264,13 +321,29 @@ export class MessagesService {
     return { messageId, originalSenderId: senderId, type, signature };
   }
 
-  /** Sign and send a single receipt; failures are logged, never thrown. */
-  private async sendReceipt(messageId: string, senderId: string, type: ReceiptType): Promise<void> {
+  /**
+   * Sign a batch of pending receipts and acknowledge them in a single request. Per-receipt signing
+   * failures are logged and skipped; a failed network send is logged, never thrown.
+   */
+  private async flushReceipts(pending: PendingReceipt[]): Promise<void> {
+    if (pending.length === 0) {
+      return;
+    }
+    const receipts: DeliveryReceipt[] = [];
+    for (const { messageId, senderId, type } of pending) {
+      try {
+        receipts.push(await this.signedReceipt(messageId, senderId, type));
+      } catch (e) {
+        console.warn('Could not sign receipt', messageId, e);
+      }
+    }
+    if (receipts.length === 0) {
+      return;
+    }
     try {
-      const { signature } = await this.signedReceipt(messageId, senderId, type);
-      await lastValueFrom(this.messagesApi.sendReceipt(messageId, senderId, signature, type));
+      await lastValueFrom(this.messagesApi.sendReceiptsBatch(receipts));
     } catch (err) {
-      console.error(`Failed to send ${type} receipt:`, err);
+      console.error('Failed to send receipts:', err);
     }
   }
 
@@ -292,6 +365,9 @@ export class MessagesService {
 
     this.keyChangedSubscription?.unsubscribe();
     this.keyChangedSubscription = undefined;
+
+    this.connectedSubscription?.unsubscribe();
+    this.connectedSubscription = undefined;
 
     this.hubService.disconnect();
     this.secureMsg.clearMemory();

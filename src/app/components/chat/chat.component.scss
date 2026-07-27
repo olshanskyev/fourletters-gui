@@ -36,7 +36,7 @@ app-chat-layout {
 }
 
 .chat-header::before {
-  inset: calc(-1 * var(--vertical-padding)) 0 50%;
+  inset: calc(-1 * var(--vertical-padding) - env(safe-area-inset-top)) 0 50%;
 }
 
 .chat-bottom::after {
@@ -74,9 +74,9 @@ app-chat-layout {
 
   .message-image {
     display: block;
-    max-height: 320px;
     width: auto;
     height: auto;
+    max-height: 320px;
     cursor: pointer;
     border-radius: var(--mat-sys-corner-medium);
   }
@@ -86,6 +86,7 @@ app-chat-layout {
     padding: 0;
     overflow: hidden;
     border: 1px solid var(--mat-sys-background);
+
     .message-image {
       border-radius: 0;
     }
@@ -96,7 +97,7 @@ app-chat-layout {
       bottom: 0.25rem;
       padding: 0.125rem 0.375rem;
       color: #fff;
-      background-color: rgba(0, 0, 0, 0.35);
+      background-color: rgb(0 0 0 / 0.35);
       border-radius: var(--mat-sys-corner-medium);
 
       .message-status .opacity-60 {
@@ -202,23 +203,32 @@ app-chat-layout {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  cursor: zoom-out;
-  background-color: rgba(0, 0, 0, 0.85);
   animation: lightbox-fade 0.2s ease;
 
+  .lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    cursor: zoom-out;
+    background-color: rgb(0 0 0 / 0.85);
+    border: 0;
+  }
+
   .lightbox-image {
+    position: relative;
     max-width: 100%;
     max-height: 100%;
     cursor: default;
-    border-radius: var(--mat-sys-corner-medium);
     object-fit: contain;
+    border-radius: var(--mat-sys-corner-medium);
     animation: lightbox-zoom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .lightbox-close {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
+    top: calc(1rem + env(safe-area-inset-top));
+    right: calc(1rem + env(safe-area-inset-right));
+    z-index: 1;
     color: #fff;
   }
 }
