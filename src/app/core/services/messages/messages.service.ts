@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { MessagesRepository } from './messages.repository';
-import { LocalMessage, MessageContent, MessageContentType } from './models/messages.model';
+import { LocalMessage, MessageContent, MessageContentType, SystemMessage } from './models/messages.model';
 import { Observable, Subscription, lastValueFrom, concatMap } from 'rxjs';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
+import { ContactsService } from '@core/services/contacts/contacts.service';
 import { HubService } from './ws/hub.service';
 import { MessagesApiService } from './messages-api.service';
 import { OutboxService } from './outbox.service';
@@ -20,6 +21,7 @@ export class MessagesService {
 
   private repository = inject(MessagesRepository);
   private conversationsService = inject(ConversationsService);
+  private contactsService = inject(ContactsService);
   private hubService = inject(HubService);
   private messagesApi = inject(MessagesApiService);
   private outboxService = inject(OutboxService);
@@ -30,6 +32,7 @@ export class MessagesService {
   private deliveredSubscription?: Subscription;
   private readSubscription?: Subscription;
   private undecryptableSubscription?: Subscription;
+  private keyChangedSubscription?: Subscription;
 
   /**
    * Connect to the Hub and start handling incoming live messages. Idempotent.
@@ -70,6 +73,12 @@ export class MessagesService {
         if (await this.checkReceiptSignature(receipt)) {
           await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
         }
+      })
+    ).subscribe();
+
+    this.keyChangedSubscription = this.contactsService.keyChanged$.pipe(
+      concatMap(async ({ userId }) => {
+        await this.insertIdentityChangedNotice(userId);
       })
     ).subscribe();
 
@@ -273,6 +282,9 @@ export class MessagesService {
     this.undecryptableSubscription?.unsubscribe();
     this.undecryptableSubscription = undefined;
 
+    this.keyChangedSubscription?.unsubscribe();
+    this.keyChangedSubscription = undefined;
+
     this.hubService.disconnect();
     this.secureMsg.clearMemory();
   }
@@ -282,6 +294,33 @@ export class MessagesService {
    */
   observeMessages(conversationId: string): Observable<LocalMessage[]> {
     return this.repository.observeMessagesByConversation(conversationId);
+  }
+
+  /**
+   * Drop an identity-changed notice into the direct conversation with a contact and into every
+   * group they share with us. All conversation lookups are local reads — no server roster fetch.
+   */
+  private async insertIdentityChangedNotice(userId: string): Promise<void> {
+    const directId = await this.conversationsService.findDirectConversationId(userId);
+    const groupIds = await this.conversationsService.findGroupConversationIdsWithMember(userId);
+    const conversationIds = directId ? [directId, ...groupIds] : groupIds;
+    for (const conversationId of conversationIds) {
+      await this.repository.addMessage(this.identityChangedNotice(conversationId, userId));
+    }
+  }
+
+  private identityChangedNotice(conversationId: string, userId: string): SystemMessage {
+    const now = Date.now();
+    return {
+      kind: 'system',
+      id: `sys-identity-${conversationId}-${userId}-${now}`,
+      conversationId,
+      senderId: userId,
+      text: '',
+      isMine: false,
+      createdAt: now,
+      systemType: 'identity-changed',
+    };
   }
 
 

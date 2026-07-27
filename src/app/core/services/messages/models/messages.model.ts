@@ -37,4 +37,14 @@ export interface GroupMessage extends BaseMessage {
   epoch?: number; // group Sender-Key epoch this copy was encrypted under
 }
 
-export type LocalMessage = DirectMessage | GroupMessage;
+export type SystemMessageType = 'identity-changed';
+
+/** A locally generated, non-encrypted timeline notice (e.g. a contact's identity key changed). */
+export interface SystemMessage extends BaseMessage {
+  kind: 'system';
+  systemType: SystemMessageType;
+  recipientId?: undefined; // guard: never routed
+  groupId?: undefined;
+}
+
+export type LocalMessage = DirectMessage | GroupMessage | SystemMessage;

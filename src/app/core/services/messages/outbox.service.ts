@@ -242,7 +242,7 @@ export class OutboxService {
       }
       if (msg.kind === 'group') {
         group.push(msg);
-      } else {
+      } else if (msg.kind === 'direct') {
         direct.push(msg);
       }
     }
@@ -334,9 +334,13 @@ export class OutboxService {
 
   /** Transmit a message's ciphertext to its destination: a group fan-out or a single 1:1 send. */
   private dispatch(msg: LocalMessage): Promise<AcceptedResponse | undefined> {
-    return msg.kind === 'group'
-      ? this.fanOutGroup(msg)
-      : this.sendDirect(msg, msg.recipientId);
+    if (msg.kind === 'group') {
+      return this.fanOutGroup(msg);
+    }
+    if (msg.kind === 'system') {
+      return Promise.resolve(undefined);
+    }
+    return this.sendDirect(msg, msg.recipientId);
   }
 
   /** Transmit the stored 1:1 ciphertext to a single recipient. */

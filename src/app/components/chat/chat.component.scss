@@ -110,6 +110,41 @@ app-chat-layout {
   margin-bottom: 0.25rem;
 }
 
+.date-separator {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+  pointer-events: none;
+
+  span {
+    padding: 0.125rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--mat-sys-on-surface);
+    background-color: color-mix(in srgb, var(--mat-sys-surface), transparent 30%);
+    border-radius: var(--mat-sys-corner-full);
+    backdrop-filter: blur(2px);
+  }
+}
+
+.system-message {
+  display: flex;
+  justify-content: center;
+  margin: 0.25rem 0;
+
+  span {
+    max-width: 80%;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--mat-sys-on-surface);
+    text-align: center;
+    background-color: var(--mat-sys-surface);
+    border-radius: var(--mat-sys-corner-large);
+  }
+}
+
 .notification-container {
   position: relative;
   top: 50%;

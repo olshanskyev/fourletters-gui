@@ -28,5 +28,8 @@
   "confirm_password": "Confirm Password",
   "remember_me": "Remember Me",
   "register": "Create account",
-  "register_welcome": "Welcome"
+  "register_welcome": "Welcome",
+  "unknown_contact": "Unknown contact",
+  "system_identity_changed": "Security identity changed — this contact may have reinstalled the app or switched device",
+  "system_identity_changed_group": "{{name}}'s security identity changed — they may have reinstalled the app or switched device"
 }

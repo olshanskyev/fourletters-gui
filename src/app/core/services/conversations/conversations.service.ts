@@ -4,6 +4,7 @@ import { LocalConversation, ConversationView } from './models/conversations.mode
 import { Observable } from 'rxjs';
 import { UsersService } from '@core/services/users/users.service';
 import { GroupsService } from '@core/services/groups/groups.service';
+import { GroupsRepository } from '@core/services/groups/groups.repository';
 
 @Injectable({
   providedIn: 'root'
@@ -12,6 +13,7 @@ export class ConversationsService {
   private repository = inject(ConversationsRepository);
   private usersService = inject(UsersService);
   private groupsService = inject(GroupsService);
+  private groupsRepo = inject(GroupsRepository);
 
   /**
    * Observe all conversations as UI view-models, sorted by latest activity
@@ -97,6 +99,28 @@ export class ConversationsService {
   }
 
   // ---- internal helpers ------------------------------------------------------------------
+
+  /** The id of the direct conversation with a peer, if one exists. */
+  async findDirectConversationId(peerId: string): Promise<string | undefined> {
+    return (await this.findDirectConversationWith(peerId))?.id;
+  }
+
+  /**
+   * Ids of group conversations whose locally cached roster includes a member. Local-only reads (no
+   * server roster fetch), so it is safe to call on every contact key change.
+   */
+  async findGroupConversationIdsWithMember(userId: string): Promise<string[]> {
+    const all = await this.repository.getAllConversations();
+    const groups = all.filter(c => c.kind === 'group' && c.groupId);
+    const ids: string[] = [];
+    for (const c of groups) {
+      const group = await this.groupsRepo.getGroup(c.groupId!);
+      if (group?.members.includes(userId)) {
+        ids.push(c.id);
+      }
+    }
+    return ids;
+  }
 
   private async findDirectConversationWith(peerId: string): Promise<LocalConversation | undefined> {
     const all = await this.repository.getAllConversations();

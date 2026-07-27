@@ -34,7 +34,7 @@ import { fileToAvatarDataUrl } from '@core/utils/avatar-image';
     </div>
 
     @if (error()) {
-      <span class="avatar-error f-s-12 m-t-4">{{ error() }}</span>
+      <div class="avatar-error f-s-12 m-t-4">{{ error() }}</div>
     }
   `,
   styles: `

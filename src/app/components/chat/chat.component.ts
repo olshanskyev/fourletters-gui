@@ -10,6 +10,7 @@ import { ChatDetailsComponent } from './chat-details/chat-details.component';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { toSignal, toObservable, rxResource, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { switchMap, of, Subject, bufferTime, filter } from 'rxjs';
@@ -39,6 +40,7 @@ import { UsersService } from '@core/services/users/users.service';
     RouterLink,
     ObserveVisibilityDirective,
     DecryptMessagePipe,
+    TranslateModule,
   ],
 })
 export class ChatComponent {
@@ -71,6 +73,21 @@ export class ChatComponent {
 
   isGroupConversation = computed(() => this.conversation.value()?.kind === 'group');
 
+  // Messages grouped into day sections so each date header stays pinned only within its own day.
+  timeline = computed<DaySection[]>(() => {
+    const sections: DaySection[] = [];
+    let current: DaySection | undefined;
+    for (const message of this.messages()) {
+      const day = new Date(message.createdAt).setHours(0, 0, 0, 0);
+      if (!current || current.date !== day) {
+        current = { id: `day-${day}`, date: day, messages: [] };
+        sections.push(current);
+      }
+      current.messages.push(message);
+    }
+    return sections;
+  });
+
   private groupSenderIds = computed(
     () => {
       if (!this.isGroupConversation()) {
@@ -83,13 +100,16 @@ export class ChatComponent {
     { equal: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]) },
   );
 
-  private avatarsResource = resource({
+  private profilesResource = resource({
     params: () => this.groupSenderIds(),
     loader: async ({ params: senderIds }) => {
       const profiles = await Promise.all(senderIds.map((id) => this.usersService.getProfile(id)));
       return Object.fromEntries(senderIds.map((id, i) => [
         id,
-        profiles[i]?.localAvatarUrl || profiles[i]?.avatarUrl
+        {
+          avatar: profiles[i]?.localAvatarUrl || profiles[i]?.avatarUrl,
+          name: profiles[i]?.localName || profiles[i]?.username,
+        },
       ]));
     },
   });
@@ -135,6 +155,16 @@ export class ChatComponent {
   }
 
   messageAvatar(senderId: string): string | undefined {
-    return this.avatarsResource.value()?.[senderId];
+    return this.profilesResource.value()?.[senderId]?.avatar;
   }
+
+  messageSenderName(senderId: string): string | undefined {
+    return this.profilesResource.value()?.[senderId]?.name;
+  }
+}
+
+interface DaySection {
+  id: string;
+  date: number;
+  messages: LocalMessage[];
 }
