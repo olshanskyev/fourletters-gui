@@ -111,15 +111,16 @@ export class ChatDetailsComponent {
   // Direct chats always allow a local avatar override; group avatars are owner-only.
   canEditAvatar = computed(() => (this.isGroupConversation() ? !!this.isGroupAdmin() : true));
 
-  // Only a group owner may rename the group.
-  canEditName = computed(() => this.isGroupConversation() && !!this.isGroupAdmin());
+  // Direct chats always allow a local name override; group names are owner-only.
+  canEditName = computed(() => (this.isGroupConversation() ? !!this.isGroupAdmin() : true));
 
-  // Live title: prefer the group's up-to-date name over the conversation snapshot.
+  // Live title: prefer the group's up-to-date name or the contact's local override.
   title = computed(() => {
     if (this.isGroupConversation()) {
       return this.groupResource.value()?.name ?? this.conversationView()?.title;
     }
-    return this.conversationView()?.title;
+    const profile = this.userResource.value();
+    return profile?.localName ?? profile?.username ?? this.conversationView()?.title;
   });
 
   isEditingName = signal(false);
@@ -178,16 +179,24 @@ export class ChatDetailsComponent {
       this.isEditingName.set(false);
       return;
     }
-    const groupId = this.localConversation.value()?.groupId;
-    if (!groupId) {
-      return;
-    }
     this.nameError.set(undefined);
     try {
-      await this.groupsService.updateName(groupId, name);
+      if (this.isGroupConversation()) {
+        const groupId = this.localConversation.value()?.groupId;
+        if (!groupId) {
+          return;
+        }
+        await this.groupsService.updateName(groupId, name);
+      } else {
+        const peerId = this.localConversation.value()?.peerId;
+        if (!peerId) {
+          return;
+        }
+        await this.usersService.setLocalName(peerId, name);
+      }
       this.isEditingName.set(false);
     } catch (e) {
-      this.nameError.set(e instanceof Error ? e.message : 'Failed to rename the group.');
+      this.nameError.set(e instanceof Error ? e.message : 'Failed to rename.');
     }
   }
 

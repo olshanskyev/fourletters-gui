@@ -48,6 +48,22 @@ export class UsersService {
   }
 
   /**
+   * Set (or clear) a local name override for a user. Stored locally only.
+   */
+  async setLocalName(userId: string, localName: string | undefined): Promise<void> {
+    const cached = await this.repository.getProfile(userId);
+    const record: UserProfileRecord = {
+      id: userId,
+      username: cached?.username,
+      avatarUrl: cached?.avatarUrl,
+      localName,
+      localAvatarUrl: cached?.localAvatarUrl,
+      updatedAt: cached?.updatedAt ?? 0
+    };
+    await this.repository.putProfile(record);
+  }
+
+  /**
    * Fetch-and-observe a single profile: forces a server refresh, then streams the local record. The
    * cached value emits immediately and the refresh's cache write re-emits with the fresh data.
    */
