@@ -41,6 +41,11 @@ export class ConversationsService {
     return this.repository.getConversation(id);
   }
 
+  /** Remove a conversation locally (e.g. after leaving a group). */
+  async removeConversation(id: string): Promise<void> {
+    await this.repository.deleteConversation(id);
+  }
+
   /**
    * Find-or-create the thin direct conversation with a peer. Idempotent; no metadata fetch.
    */

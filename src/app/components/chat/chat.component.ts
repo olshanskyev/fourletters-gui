@@ -22,6 +22,12 @@ import { MessagesService } from '@core/services/messages/messages.service';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { UsersService } from '@core/services/users/users.service';
 
+interface DaySection {
+  id: string;
+  date: number;
+  messages: LocalMessage[];
+}
+
 @Component({
   selector: 'app-chat',
   standalone: true,
@@ -40,7 +46,7 @@ import { UsersService } from '@core/services/users/users.service';
     RouterLink,
     ObserveVisibilityDirective,
     DecryptMessagePipe,
-    TranslateModule,
+    TranslateModule
   ],
 })
 export class ChatComponent {
@@ -163,8 +169,4 @@ export class ChatComponent {
   }
 }
 
-interface DaySection {
-  id: string;
-  date: number;
-  messages: LocalMessage[];
-}
+

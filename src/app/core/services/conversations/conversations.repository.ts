@@ -26,6 +26,13 @@ export class ConversationsRepository {
   }
 
   /**
+   * Delete a conversation by ID
+   */
+  async deleteConversation(id: string): Promise<void> {
+    await this.db.conversations.delete(id);
+  }
+
+  /**
    * Atomically add `delta` to a conversation's unread count (clamped at 0). The read-modify-write
    * runs in a Dexie transaction so a concurrent incoming (+1) and read (-1) can't clobber each other.
    */

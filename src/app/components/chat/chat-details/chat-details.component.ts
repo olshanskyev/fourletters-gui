@@ -1,8 +1,10 @@
 import { Component, inject, ChangeDetectionStrategy, input, resource, computed, signal } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { of } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { ProfileLayoutComponent } from '@layouts/profile-layout/profile-layout.component';
+import { ListLayoutComponent } from '@layouts/list-layout/list-layout.component';
 import { SidePanelService } from '@core/services/shared/side-panel.service';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -26,6 +28,7 @@ import { AvatarPicker } from '@components/widgets/avatar-picker';
   imports: [
     CommonModule,
     ProfileLayoutComponent,
+    ListLayoutComponent,
     MatButtonModule,
     MatIconModule,
     MatFormFieldModule,
@@ -41,6 +44,7 @@ export class ChatDetailsComponent {
   private readonly groupsService = inject(GroupsService);
   private readonly usersService = inject(UsersService);
   private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
 
   conversationView = input<ConversationView | undefined>(undefined);
 
@@ -78,6 +82,24 @@ export class ChatDetailsComponent {
   membersProfilesResource = rxResource({
     params: () => this.memberIds(),
     stream: ({ params: memberIds }) => this.usersService.getAndObserveProfiles(memberIds),
+  });
+
+  // Roster management (owner adds members, any member leaves).
+  isAddingMembers = signal(false);
+  selectedNewMembers = signal<string[]>([]);
+  rosterError = signal<string | undefined>(undefined);
+
+  // Lazily loaded only while the add-members panel is open.
+  contactsResource = resource({
+    params: () => this.isAddingMembers(),
+    loader: ({ params: adding }) =>
+      adding ? this.usersService.getContactList() : Promise.resolve([]),
+  });
+
+  // Contacts eligible to be added: everyone not already in the roster.
+  addableContacts = computed(() => {
+    const members = this.memberIds();
+    return (this.contactsResource.value() ?? []).filter((c) => !members.includes(c.id));
   });
 
   userResource = rxResource({
@@ -166,6 +188,51 @@ export class ChatDetailsComponent {
       this.isEditingName.set(false);
     } catch (e) {
       this.nameError.set(e instanceof Error ? e.message : 'Failed to rename the group.');
+    }
+  }
+
+  openAddMembers(): void {
+    this.rosterError.set(undefined);
+    this.selectedNewMembers.set([]);
+    this.isAddingMembers.set(true);
+  }
+
+  cancelAddMembers(): void {
+    this.isAddingMembers.set(false);
+    this.selectedNewMembers.set([]);
+  }
+
+  async confirmAddMembers(): Promise<void> {
+    const groupId = this.localConversation.value()?.groupId;
+    const ids = this.selectedNewMembers();
+    if (!groupId || ids.length === 0) {
+      return;
+    }
+    this.rosterError.set(undefined);
+    try {
+      await this.groupsService.addMembers(groupId, ids);
+      this.cancelAddMembers();
+    } catch (e) {
+      this.rosterError.set(e instanceof Error ? e.message : 'Failed to add members.');
+    }
+  }
+
+  async leaveGroup(): Promise<void> {
+    const groupId = this.localConversation.value()?.groupId;
+    const conversationId = this.conversationView()?.id;
+    if (!groupId) {
+      return;
+    }
+    this.rosterError.set(undefined);
+    try {
+      await this.groupsService.leaveGroup(groupId);
+      if (conversationId) {
+        await this.conversationService.removeConversation(conversationId);
+      }
+      this.close();
+      await this.router.navigate(['/m']);
+    } catch (e) {
+      this.rosterError.set(e instanceof Error ? e.message : 'Failed to leave the group.');
     }
   }
 }

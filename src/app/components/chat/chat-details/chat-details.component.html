@@ -1,78 +1,134 @@
-<app-profile-layout>
-  <div header class="default-header justify-content-between">
-    <div class="gap-8 d-flex align-items-center">
-      <button matIconButton (click)="close()">
-        <mat-icon>close</mat-icon>
-      </button>
-      <h3 class="m-0">
-        @if (isGroupConversation()) {
-          Group Info
-        }
-        @else {
-          Chat Info
-        }
-      </h3>
-    </div>
-  </div>
-
-  <div lead-body class="d-flex flex-col align-items-center p-y-8 p-x-16">
-    <app-avatar-picker
-      [avatarUrl]="avatarUrl()"
-      [editable]="canEditAvatar()"
-      (avatarSelected)="onAvatarSelected($event)"
-    />
-
-    @if (isEditingName()) {
-      <div class="d-flex align-items-center gap-8 m-t-4">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <input
-            matInput
-            #nameInput
-            [value]="title() ?? ''"
-            (keydown.enter)="saveName(nameInput.value)"
-            (keydown.escape)="cancelEditName()"
-          />
-        </mat-form-field>
-        <button matIconButton (click)="saveName(nameInput.value)">
-          <mat-icon>check</mat-icon>
-        </button>
-        <button matIconButton (click)="cancelEditName()">
+<div class="sliding-panel" [class.slide-out]="isAddingMembers()">
+  <app-profile-layout>
+    <div header class="default-header justify-content-between">
+      <div class="gap-8 d-flex align-items-center">
+        <button matIconButton (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
+        <h3 class="m-0">
+          @if (isGroupConversation()) {
+            Group Info
+          }
+          @else {
+            Chat Info
+          }
+        </h3>
       </div>
-    }
-    @else {
-      <div class="d-flex align-items-center gap-8 m-t-4">
-        <h2 class="text-color-primary m-0">{{ title() }}</h2>
-        @if (canEditName()) {
-          <button matIconButton (click)="startEditName()">
-            <mat-icon>edit</mat-icon>
+    </div>
+
+    <div lead-body class="d-flex flex-col align-items-center p-y-8 p-x-16">
+      <app-avatar-picker
+        [avatarUrl]="avatarUrl()"
+        [editable]="canEditAvatar()"
+        (avatarSelected)="onAvatarSelected($event)"
+      />
+
+      @if (isEditingName()) {
+        <div class="d-flex align-items-center gap-8 m-t-4">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <input
+              matInput
+              #nameInput
+              [value]="title() ?? ''"
+              (keydown.enter)="saveName(nameInput.value)"
+              (keydown.escape)="cancelEditName()"
+            />
+          </mat-form-field>
+          <button matIconButton (click)="saveName(nameInput.value)">
+            <mat-icon>check</mat-icon>
           </button>
-        }
-      </div>
-    }
+          <button matIconButton (click)="cancelEditName()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+      @else {
+        <div class="d-flex align-items-center gap-8 m-t-4">
+          <h2 class="text-color-primary m-0">{{ title() }}</h2>
+          @if (canEditName()) {
+            <button matIconButton (click)="startEditName()">
+              <mat-icon>edit</mat-icon>
+            </button>
+          }
+        </div>
+      }
 
-    @if (avatarError()) {
-      <div class="avatar-error f-s-12">{{ avatarError() }}</div>
-    }
+      @if (avatarError()) {
+        <div class="error-div f-s-12">{{ avatarError() }}</div>
+      }
 
-    @if (nameError()) {
-      <div class="avatar-error f-s-12">{{ nameError() }}</div>
-    }
-  </div>
+      @if (nameError()) {
+        <div class="error-div f-s-12">{{ nameError() }}</div>
+      }
+    </div>
 
-  <div sticky-mid>
-    @if (isInitialized()) {
-      <mat-tab-group>
-        @if (isGroupConversation()) {
-          <mat-tab [label]="'Members' + (membersProfilesResource.value()?.length ? ' (' + membersProfilesResource.value()!.length + ')' : '')">
-            <app-users-list [userProfiles]="membersProfilesResource.value() ?? []" />
+    <div sticky-mid>
+      @if (isInitialized()) {
+        <mat-tab-group>
+          @if (isGroupConversation()) {
+            <mat-tab [label]="'Members' + (membersProfilesResource.value()?.length ? ' (' + membersProfilesResource.value()!.length + ')' : '')">
+              <app-users-list [userProfiles]="membersProfilesResource.value() ?? []" />
+              <div class="d-flex flex-col gap-8 p-16">
+                @if (isGroupAdmin()) {
+                  <button matButton (click)="openAddMembers()">
+                    <mat-icon>person_add</mat-icon>
+                    Add member
+                  </button>
+                }
+                @else {
+                  <button matButton (click)="leaveGroup()">
+                    <mat-icon>logout</mat-icon>
+                    Leave group
+                  </button>
+                }
+                @if (rosterError()) {
+                  <div class="error-div f-s-12">{{ rosterError() }}</div>
+                }
+              </div>
+            </mat-tab>
+          }
+          <mat-tab label="Files">
+            Files to be here
           </mat-tab>
-        }
-        <mat-tab label="Files">
-          Files to be here
-        </mat-tab>
-      </mat-tab-group>
-    }
-  </div>
-</app-profile-layout>
+        </mat-tab-group>
+      }
+    </div>
+  </app-profile-layout>
+</div>
+
+<div class="sliding-panel" [class.slide-in]="isAddingMembers()">
+  <app-list-layout>
+    <div header class="default-header">
+      <div class="d-flex align-items-center gap-8">
+        <button matIconButton (click)="cancelAddMembers()">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+        <span class="f-s-18">Add members</span>
+      </div>
+    </div>
+
+    <div body class="p-y-4 p-x-4">
+      @if (contactsResource.isLoading()) {
+        <div class="p-16 text-center text-color-second">Loading contacts...</div>
+      } @else {
+        <app-users-list
+          [userProfiles]="addableContacts()"
+          [selectionMode]="true"
+          [(selectedProfiles)]="selectedNewMembers"
+        />
+      }
+      @if (rosterError()) {
+        <div class="avatar-error f-s-12 p-x-16">{{ rosterError() }}</div>
+      }
+    </div>
+  </app-list-layout>
+
+  <button
+    matFab
+    class="action-button"
+    (click)="confirmAddMembers()"
+    [hidden]="selectedNewMembers().length === 0"
+  >
+    <mat-icon>check</mat-icon>
+  </button>
+</div>
