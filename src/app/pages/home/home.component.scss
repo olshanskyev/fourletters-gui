@@ -1,0 +1,18 @@
+.login-legal-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 16px;
+  font-size: 0.85rem;
+  color: var(--mat-sys-on-surface-variant);
+
+  a {
+    color: var(--mat-sys-on-surface-variant);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

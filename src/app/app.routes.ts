@@ -6,6 +6,7 @@ import { MainComponent } from '@pages';
 import { loggedInGuard } from '@core/guards';
 import { DefaultLayoutComponent } from '@layouts';
 import { HomeComponent } from '@pages';
+import { PrivacyPolicyComponent, TermsOfServiceComponent } from '@pages';
 import { loggedInRedirectGuard } from '@core/guards';
 
 export const routes: Routes = [
@@ -15,6 +16,15 @@ export const routes: Routes = [
     component: DefaultLayoutComponent,
     children: [
       { path: '', component: HomeComponent },
+    ],
+  },
+  {
+    // Public legal pages - reachable without authentication (required by OAuth review).
+    path: '',
+    component: DefaultLayoutComponent,
+    children: [
+      { path: 'privacy', component: PrivacyPolicyComponent },
+      { path: 'terms', component: TermsOfServiceComponent },
     ],
   },
   {

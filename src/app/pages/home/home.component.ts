@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatInputModule } from '@angular/material/input';
+import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { GoogleAuthService, VKAuthService } from '@core/services/authentication';
@@ -17,7 +18,7 @@ import { GoogleAuthService, VKAuthService } from '@core/services/authentication'
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatCardModule, MatInputModule, TranslateModule],
+  imports: [MatCardModule, MatInputModule, RouterLink, TranslateModule],
 })
 export class HomeComponent implements AfterViewInit {
   private readonly vkService = inject(VKAuthService);

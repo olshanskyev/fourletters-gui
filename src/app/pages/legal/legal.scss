@@ -1,0 +1,35 @@
+.legal-page {
+  max-width: 820px;
+  padding: 24px 16px 64px;
+  margin: 0 auto;
+  overflow-y: auto;
+  line-height: 1.6;
+  color: var(--mat-sys-on-surface);
+
+  h1 {
+    margin-bottom: 4px;
+  }
+
+  .legal-updated {
+    margin-bottom: 24px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  h2 {
+    margin-top: 32px;
+    margin-bottom: 8px;
+  }
+
+  a {
+    color: var(--mat-sys-primary);
+  }
+
+  ul {
+    padding-left: 20px;
+  }
+
+  .legal-back {
+    display: inline-block;
+    margin-top: 40px;
+  }
+}

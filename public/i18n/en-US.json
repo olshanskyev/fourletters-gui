@@ -21,6 +21,8 @@
   "logout": "Logout",
   "login": "Login",
   "login_title": "Welcome Back",
+  "privacy_policy": "Privacy Policy",
+  "terms_of_service": "Terms of Service",
   "please_enter_username": "Please enter user name",
   "please_enter_password": "Please enter password",
   "username": "Username",
