@@ -3,9 +3,9 @@
     <mat-card-header class="d-flex flex-col align-items-center m-b-16">
       <h1 class="app-name d-flex flex-row align-items-center gap-8">
         <img src="favicon.svg" alt="" width="32" height="32" />
-        <span>{{ 'app_name' | translate }}</span>
+        <span>4letters Messenger</span>
       </h1>
-      <p class="app-tagline">{{ 'app_tagline' | translate }}</p>
+      <p class="app-tagline">A free, open-source messenger with end-to-end encryption</p>
     </mat-card-header>
 
     <mat-card-content class="d-flex flex-col align-items-center gap-16">
@@ -17,6 +17,8 @@
   </mat-card>
 
   <footer class="login-legal-footer d-flex flex-row align-items-center justify-content-center gap-8">
+    <a routerLink="/about">{{ 'about' | translate }}</a>
+    <span>&middot;</span>
     <a routerLink="/privacy">{{ 'privacy_policy' | translate }}</a>
     <span>&middot;</span>
     <a routerLink="/terms">{{ 'terms_of_service' | translate }}</a>

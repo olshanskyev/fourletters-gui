@@ -6,7 +6,7 @@ import { MainComponent } from '@pages';
 import { loggedInGuard } from '@core/guards';
 import { DefaultLayoutComponent } from '@layouts';
 import { HomeComponent } from '@pages';
-import { PrivacyPolicyComponent, TermsOfServiceComponent } from '@pages';
+import { PrivacyPolicyComponent, TermsOfServiceComponent, AboutComponent } from '@pages';
 import { loggedInRedirectGuard } from '@core/guards';
 
 export const routes: Routes = [
@@ -23,6 +23,7 @@ export const routes: Routes = [
     path: '',
     component: DefaultLayoutComponent,
     children: [
+      { path: 'about', component: AboutComponent },
       { path: 'privacy', component: PrivacyPolicyComponent },
       { path: 'terms', component: TermsOfServiceComponent },
     ],
