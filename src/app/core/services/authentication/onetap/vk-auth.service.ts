@@ -27,7 +27,11 @@ export class VKAuthService implements OneTapProvider<VKID.OneTapStyles, VKTokenR
                 app: environment.vkAppId,
                 redirectUrl: environment.redirectUrl,
                 responseMode: VKID.ConfigResponseMode.Callback,
-                source: VKID.ConfigSource.LOWCODE
+                source: VKID.ConfigSource.LOWCODE,
+                // Request an offline access token: unlike the default token it is not bound to the
+                // IP that obtained it, so the backend can call the VK API from its own IP without
+                // triggering error 5 "access_token was given to another ip address".
+                scope: 'offline'
             });
             this.initialized = true;
         }
@@ -46,6 +50,7 @@ export class VKAuthService implements OneTapProvider<VKID.OneTapStyles, VKTokenR
                 const deviceId = payload.device_id;
                 VKID.Auth.exchangeCode(code, deviceId)
                     .then((payload) => {
+                        console.log('VK OneTap login success', payload);
                         if (this.onLoginHandler)
                             this.onLoginHandler(payload);
                     })
