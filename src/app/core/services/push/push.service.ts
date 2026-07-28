@@ -108,13 +108,18 @@ export class PushService {
    */
   async enable(): Promise<void> {
     if (!this.swPush.isEnabled || !environment.vapidPublicKey) return;
-    if (this.currentPermission() === 'denied') {
-      this.permission.set('denied');
-      return;
-    }
 
+    // Request permission explicitly within the user gesture. Relying on PushManager.subscribe() to
+    // raise the prompt is unreliable on desktop browsers; Notification.requestPermission() is the
+    // spec-compliant trigger and returns the outcome so we can update the banner state.
+    let permission = this.currentPermission();
+    if (permission === 'default' && typeof Notification !== 'undefined') {
+      permission = await Notification.requestPermission();
+    }
+    this.permission.set(permission);
+
+    if (permission !== 'granted') return;
     await this.subscribe();
-    this.permission.set(this.currentPermission());
   }
 
   /** Re-register the subscription without prompting; only meaningful when already granted. */
