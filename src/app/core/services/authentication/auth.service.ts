@@ -6,7 +6,7 @@ import { TokenService } from './token.service';
 
 import { Router } from '@angular/router';
 import { HttpClient, HttpErrorResponse, HttpStatusCode } from '@angular/common/http';
-import { VKAuthService, VKTokenResult } from './onetap/vk-auth.service';
+import { VKAuthService, VKLoginResult } from './onetap/vk-auth.service';
 import { GoogleAuthService, GoogleTokenResult } from './onetap/google-auth.service';
 
 import { UserResponse } from '@dto/models';
@@ -70,9 +70,10 @@ export class AuthService {
     });
   }
 
-  public auth(token: string, provider: string) {
+  public auth(token: string, provider: string, displayInfo?: Partial<AuthRequest>) {
     const authRequest: AuthRequest = {
-      token
+      token,
+      ...displayInfo
     };
     const source = this.httpClient.post<AuthResponse>(`/auth/${provider}`,
       authRequest,
@@ -90,8 +91,12 @@ export class AuthService {
     ).subscribe();
   }
 
-  private vkLoggedIn(token: VKTokenResult) {
-    this.auth(token.access_token, 'vk');
+  private vkLoggedIn(result: VKLoginResult) {
+    this.auth(result.idToken, 'vk', {
+      firstName: result.firstName,
+      lastName: result.lastName,
+      avatarUrl: result.avatarUrl
+    });
   }
 
   private googleLoggedIn(token: GoogleTokenResult) {

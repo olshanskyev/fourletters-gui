@@ -11,8 +11,20 @@
 
 export interface AuthRequest { 
     /**
-     * The identity token provided by the third-party OAuth provider.
+     * The identity token provided by the third-party OAuth provider. This is the security anchor and is always verified server-side (VK id_token, Google credential).
      */
     token: string;
+    /**
+     * Optional client-supplied first name. Used for presentation only when the verified provider returns masked profile data (e.g. VK public_info). Never used for authentication.
+     */
+    firstName?: string;
+    /**
+     * Optional client-supplied last name. Used for presentation only; never used for authentication.
+     */
+    lastName?: string;
+    /**
+     * Optional client-supplied avatar URL. Used for presentation only; never used for authentication.
+     */
+    avatarUrl?: string;
 }
 
