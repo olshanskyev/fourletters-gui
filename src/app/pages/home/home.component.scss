@@ -16,3 +16,15 @@
     }
   }
 }
+
+.app-name {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--mat-sys-primary);
+}
+
+.app-tagline {
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+}

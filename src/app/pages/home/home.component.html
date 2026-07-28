@@ -1,13 +1,14 @@
 <div class="d-flex w-full h-full flex-col">
   <mat-card class="m-auto" style="width: 380px">
-    <mat-card-header class="m-b-24">
-      <mat-card-title class="d-flex flex-row align-items-center">
-        {{ 'login_title' | translate }}!
-      </mat-card-title>
+    <mat-card-header class="d-flex flex-col align-items-center m-b-16">
+      <h1 class="app-name d-flex flex-row align-items-center gap-8">
+        <img src="favicon.svg" alt="" width="32" height="32" />
+        <span>{{ 'app_name' | translate }}</span>
+      </h1>
+      <p class="app-tagline">{{ 'app_tagline' | translate }}</p>
     </mat-card-header>
 
     <mat-card-content class="d-flex flex-col align-items-center gap-16">
-
       <div #vkButtonContainer>
       </div>
       <div #googleButtonContainer>
