@@ -19,6 +19,8 @@ export class HubService implements OnDestroy {
   private reconnectDelay = 5000;
   private reconnectTimeoutId?: any;
   private isIntentionallyDisconnected = false;
+  /** True while a socket is being established (subscribed but not yet open/closed). */
+  private isConnecting = false;
   /** Timestamp of the last connection attempt, used to avoid churning a freshly opened socket. */
   private lastConnectAt = 0;
   /** A mobile wake within this window of a fresh connect won't force a needless reconnect. */
@@ -65,12 +67,14 @@ export class HubService implements OnDestroy {
     const url = `${baseUrl}/ws?token=${encodeURIComponent(token)}`;
 
     this.lastConnectAt = Date.now();
+    this.isConnecting = true;
     const socket$ = webSocket<HubEvent>({
       url,
       openObserver: {
         // Ignore a late open from a socket we've already replaced.
         next: () => {
           if (this.socket$ === socket$) {
+            this.isConnecting = false;
             this.connectedSubject.next();
           }
         }
@@ -104,6 +108,7 @@ export class HubService implements OnDestroy {
         if (this.socket$ !== socket$) {
           return;
         }
+        this.isConnecting = false;
         console.error('Hub WebSocket error:', err);
         this.scheduleReconnect();
       },
@@ -111,6 +116,7 @@ export class HubService implements OnDestroy {
         if (this.socket$ !== socket$) {
           return;
         }
+        this.isConnecting = false;
         console.warn('Hub WebSocket connection closed');
         this.scheduleReconnect();
       }
@@ -128,6 +134,11 @@ export class HubService implements OnDestroy {
       return;
     }
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
+    // A connection attempt is already in flight: let it resolve instead of opening a second socket.
+    // This collapses the burst of wake events (visibilitychange + pageshow + online) into one.
+    if (this.isConnecting) {
       return;
     }
     const socketDead = !this.socket$ || this.socket$.closed;
@@ -171,6 +182,7 @@ export class HubService implements OnDestroy {
 
   /** Unsubscribe and complete the current socket so its async callbacks can't drive state. */
   private teardownSocket(): void {
+    this.isConnecting = false;
     this.socketSubscription?.unsubscribe();
     this.socketSubscription = undefined;
     if (this.socket$) {
