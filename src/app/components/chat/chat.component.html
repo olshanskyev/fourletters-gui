@@ -170,7 +170,13 @@
           (keydown.enter)="$event.preventDefault(); sendMessage()"
         ></textarea>
 
-        <button matSuffix matIconButton class="m-r-4" (click)="sendMessage()">
+        <button
+          matSuffix
+          matIconButton
+          class="m-r-4"
+          (pointerdown)="$event.preventDefault()"
+          (click)="sendMessage()"
+        >
           <mat-icon>send</mat-icon>
         </button>
       </mat-form-field>
