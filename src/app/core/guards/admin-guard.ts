@@ -4,11 +4,11 @@ import { Router } from '@angular/router';
 import { NgxRolesService } from 'ngx-permissions';
 import { loggedInGuard } from './logged-in-guard';
 
-export const adminGuard = () => {
+export const adminGuard = async () => {
   const router = inject(Router);
   const rolesService = inject(NgxRolesService);
 
-  const isLoggedIn = loggedInGuard();
+  const isLoggedIn = await loggedInGuard();
   if (isLoggedIn !== true) {
     return isLoggedIn;
   }

@@ -19,6 +19,10 @@ export class HubService implements OnDestroy {
   private reconnectDelay = 5000;
   private reconnectTimeoutId?: any;
   private isIntentionallyDisconnected = false;
+  /** Timestamp of the last connection attempt, used to avoid churning a freshly opened socket. */
+  private lastConnectAt = 0;
+  /** A mobile wake within this window of a fresh connect won't force a needless reconnect. */
+  private static readonly WAKE_RECONNECT_MIN_AGE_MS = 3000;
 
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
@@ -60,6 +64,7 @@ export class HubService implements OnDestroy {
     const baseUrl = environment.baseUrlHub;
     const url = `${baseUrl}/ws?token=${encodeURIComponent(token)}`;
 
+    this.lastConnectAt = Date.now();
     const socket$ = webSocket<HubEvent>({
       url,
       openObserver: {
@@ -126,7 +131,14 @@ export class HubService implements OnDestroy {
       return;
     }
     const socketDead = !this.socket$ || this.socket$.closed;
-    if (socketDead || isMobile) {
+    if (socketDead) {
+      this.forceReconnect();
+      return;
+    }
+    // Socket still looks alive. On mobile a wake can reveal a zombie socket, so reconnect - but not
+    // when we just connected (e.g. a visibility/pageshow event right after a cold-start connect),
+    // which would needlessly tear down a genuinely fresh socket and open a second one.
+    if (isMobile && Date.now() - this.lastConnectAt >= HubService.WAKE_RECONNECT_MIN_AGE_MS) {
       this.forceReconnect();
     }
   }

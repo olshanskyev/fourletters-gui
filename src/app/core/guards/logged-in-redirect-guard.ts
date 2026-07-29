@@ -3,12 +3,9 @@ import { Router } from '@angular/router';
 
 import { loggedInGuard } from './logged-in-guard';
 
-export const loggedInRedirectGuard = () => {
+export const loggedInRedirectGuard = async () => {
   const router = inject(Router);
 
-  const isLoggedIn = loggedInGuard();
-  if (isLoggedIn === true)
-    return router.parseUrl('/m');
-
-  return true;
+  const result = await loggedInGuard();
+  return result === true ? router.parseUrl('/m') : true;
 };

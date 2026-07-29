@@ -47,7 +47,7 @@ export class AuthService {
   constructor() {
     this.vkService.onLoginSuccess((token) => this.vkLoggedIn(token));
     this.googleService.onLoginSuccess((token) => this.googleLoggedIn(token));
-    // Listen to token auto-refresh internally
+    // Listen to token auto-refresh internally (by timer)
     this.tokenService.refresh()
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.refresh().subscribe());

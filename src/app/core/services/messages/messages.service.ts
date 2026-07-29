@@ -66,7 +66,8 @@ export class MessagesService {
     // init subscriptions to live events from the Hub
     this.incomingSubscription = this.hubService.messages.pipe(
       concatMap(async (encryptedMessage) => {
-        const receipts = await this.processIncomingMessage(encryptedMessage);
+        // Live arrival: may raise a local notification if the app is backgrounded but connected.
+        const receipts = await this.processIncomingMessage(encryptedMessage, true);
         await this.flushReceipts(receipts);
       })
     ).subscribe();
@@ -143,7 +144,9 @@ export class MessagesService {
       // Acknowledge the whole batch in one request instead of one round-trip per message.
       const pending: PendingReceipt[] = [];
       for (const encryptedMessage of [...direct, ...group]) {
-        pending.push(...await this.processIncomingMessage(encryptedMessage));
+        // Inbox-sync messages were delivered while we were disconnected, so the Server already
+        // web-pushed them: never raise a duplicate local notification for them.
+        pending.push(...await this.processIncomingMessage(encryptedMessage, false));
       }
       await this.flushReceipts(pending);
 
@@ -168,7 +171,7 @@ export class MessagesService {
     );
   }
 
-  private async processIncomingMessage(encryptedMessage: EncryptedMessage | any)
+  private async processIncomingMessage(encryptedMessage: EncryptedMessage | any, notify: boolean)
     : Promise<PendingReceipt[]> {
     if (!encryptedMessage.senderId) {
       console.warn('Received encrypted message without a senderId. Dropping message.', encryptedMessage);
@@ -187,8 +190,8 @@ export class MessagesService {
 
     try {
       return groupId
-        ? await this.processIncomingGroupMessage(encryptedMessage)
-        : await this.processIncomingDirectMessage(encryptedMessage);
+        ? await this.processIncomingGroupMessage(encryptedMessage, notify)
+        : await this.processIncomingDirectMessage(encryptedMessage, notify);
     } catch (err) {
       if (err instanceof UndecryptableError || err instanceof GroupUndecryptableError) {
         // The signature was valid but we lack a usable key (sealed to a previous device key, or a
@@ -205,7 +208,9 @@ export class MessagesService {
    * Handle a pairwise (1:1) message: either an ordinary chat or a Sender Key Distribution Message
    * that silently seeds a peer's group Sender Key.
    */
-  private async processIncomingDirectMessage(encryptedMessage: EncryptedMessage | any)
+  private async processIncomingDirectMessage(
+    encryptedMessage: EncryptedMessage | any, notify: boolean
+  )
     : Promise<PendingReceipt[]> {
     const { senderId, messageId, payload } = encryptedMessage;
     const content = await this.secureMsg.unpackIncomingPayload(senderId, payload);
@@ -220,21 +225,23 @@ export class MessagesService {
       // copy (new device). It rides in as a 1:1 message but belongs in the group conversation.
       encryptedMessage.groupId = content.groupId;
       encryptedMessage.recipientId = undefined;
-      return [await this.persistIncoming(encryptedMessage, content.content, content.ts)];
+      return [await this.persistIncoming(encryptedMessage, content.content, notify, content.ts)];
     }
 
-    return [await this.persistIncoming(encryptedMessage, content.content, content.ts)];
+    return [await this.persistIncoming(encryptedMessage, content.content, notify, content.ts)];
   }
 
   /**
    * Handle a group message: decrypt it with the sender's distributed Sender Key. A missing/invalid
    * Sender Key throws GroupUndecryptableError, which the caller turns into a NACK.
    */
-  private async processIncomingGroupMessage(encryptedMessage: EncryptedMessage | any)
+  private async processIncomingGroupMessage(
+    encryptedMessage: EncryptedMessage | any, notify: boolean
+  )
     : Promise<PendingReceipt[]> {
     const { senderId, groupId, payload } = encryptedMessage;
     const { content, ts } = await this.secureMsg.unpackGroupPayload(senderId, groupId, payload);
-    return [await this.persistIncoming(encryptedMessage, content, ts)];
+    return [await this.persistIncoming(encryptedMessage, content, notify, ts)];
   }
 
   /**
@@ -242,7 +249,7 @@ export class MessagesService {
    * acknowledge delivery to the original sender.
    */
   private async persistIncoming(
-    encryptedMessage: EncryptedMessage | any, content: MessageContent, ts?: number
+    encryptedMessage: EncryptedMessage | any, content: MessageContent, notify: boolean, ts?: number
   )
     : Promise<PendingReceipt> {
     const { senderId, messageId } = encryptedMessage;
@@ -263,7 +270,9 @@ export class MessagesService {
       conversationId, messagePreview(content.type, content.text), createdAt
     );
     await this.conversationsService.adjustUnreadCount(conversationId, 1);
-    await this.notifyIfBackground(encryptedMessage, conversationId, content);
+    if (notify) {
+      await this.notifyIfBackground(encryptedMessage, conversationId, content);
+    }
     return { messageId, senderId, type: ReceiptType.Delivered };
   }
 
