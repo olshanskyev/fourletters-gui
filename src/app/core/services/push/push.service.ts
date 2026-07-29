@@ -6,6 +6,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
 
 import { environment } from '@env/environment';
+import { AppDatabase } from '@core/services/database/app.database';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { SettingsService } from '@core/services/shared/settings.service';
 import { PushSubscription as PushSubscriptionDto } from '@dto/models';
@@ -29,6 +30,7 @@ export class PushService {
   private readonly swPush = inject(SwPush);
   private readonly httpClient = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly appDb = inject(AppDatabase);
   private readonly conversations = inject(ConversationsService);
   private readonly settings = inject(SettingsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -36,6 +38,9 @@ export class PushService {
   /** Collapse bursts of local notifications from the same conversation (mirrors the server). */
   private static readonly LOCAL_DEBOUNCE_MS = 15_000;
   private readonly lastLocalNotificationAt = new Map<string, number>();
+
+  /** Max wait for the local DB before a notification click gives up and opens the list. */
+  private static readonly DB_WAIT_TIMEOUT_MS = 5_000;
 
   /** Fallback notification icon and monochrome status-bar badge (mirror the server payload). */
   private static readonly DEFAULT_ICON = '/web-app-manifest-192x192.png';
@@ -151,14 +156,14 @@ export class PushService {
     if (tag && !this.passesLocalDebounce(tag)) return;
     try {
       const registration = await navigator.serviceWorker.ready;
-      // Navigate the already-running (backgrounded) app straight to this conversation
-      const url = data.conversationId ? `/m/${data.conversationId}` : '/m';
       await registration.showNotification(title, {
         body,
         data: {
           ...data,
+          // Only bring the app to the foreground; all routing is done in onNotificationClick so
+          // there is a single source of truth (mirrors the server payload).
           onActionClick: {
-            default: { operation: 'navigateLastFocusedOrOpen', url }
+            default: { operation: 'focusLastFocusedOrOpen' }
           }
         },
         tag,
@@ -240,6 +245,11 @@ export class PushService {
 
   private async onNotificationClick(data: PushNotificationData): Promise<void> {
     try {
+      // A cold-start tap can deliver the click before auth restore initializes the local DB, so
+      // resolving the conversation would throw and fall back to the list. Wait for the DB (bounded,
+      // so a logged-out click still proceeds to /m and lets the route guard restore the session).
+      await this.waitForDatabase();
+
       let conversationId = data.conversationId;
       if (!conversationId && data.groupId) {
         conversationId = await this.conversations.ensureGroupConversation(data.groupId);
@@ -256,5 +266,13 @@ export class PushService {
       console.warn('Failed to open conversation from notification', e);
       await this.router.navigate(['/m']);
     }
+  }
+
+  /** Resolve once the local DB is ready, or after a bounded timeout (logged-out cold start). */
+  private waitForDatabase(): Promise<void> {
+    return Promise.race([
+      this.appDb.whenInitialized(),
+      new Promise<void>(resolve => setTimeout(resolve, PushService.DB_WAIT_TIMEOUT_MS))
+    ]);
   }
 }

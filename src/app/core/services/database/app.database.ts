@@ -109,9 +109,18 @@ export class UserDatabase extends Dexie {
 export class AppDatabase {
   private _db: UserDatabase | null = null;
   private _userId: string | null = null;
+  private initWaiters: Array<() => void> = [];
 
   get isInitialized(): boolean {
     return this._db !== null;
+  }
+
+  /** Resolves once a user database has been initialized (immediately if it already is). */
+  whenInitialized(): Promise<void> {
+    if (this._db) {
+      return Promise.resolve();
+    }
+    return new Promise<void>(resolve => this.initWaiters.push(resolve));
   }
 
   /** The owner's user id this database belongs to (used to scope the cross-tab Signal lock). */
@@ -152,6 +161,9 @@ export class AppDatabase {
     }
     this._userId = userId;
     this._db = new UserDatabase(userId);
+    const waiters = this.initWaiters;
+    this.initWaiters = [];
+    waiters.forEach(resolve => resolve());
   }
 
   close() {

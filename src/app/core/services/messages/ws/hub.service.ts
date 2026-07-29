@@ -26,7 +26,7 @@ export class HubService implements OnDestroy {
 
   private static readonly RECONNECT_DELAY_MS = 5000;
   /** Collapse the online/pageshow/visibilitychange burst one resume fires into a single reopen. */
-  private static readonly WAKE_DEBOUNCE_MS = 300;
+  private static readonly WAKE_DEBOUNCE_MS = 500;
 
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
