@@ -280,9 +280,7 @@ export class OutboxService {
       const acceptedIds = new Set((res.results || []).map(r => r.messageId));
       for (const msg of chunk) {
         if (acceptedIds.has(msg.id)) {
-          msg.status = 'accepted';
-          msg.serverStartedAt = res.serverStartedAt;
-          await this.repository.updateMessage(msg)
+          await this.repository.confirmAccepted(msg.id, res.serverStartedAt)
             .catch(err => console.error('Failed to update message metadata', err));
         } else if (msg.status === 'pending') {
           await this.markFailed(msg);
@@ -447,17 +445,10 @@ export class OutboxService {
    * Mark a sent message as accepted by the Server and reconcile the server-start watermark.
    */
   private async confirmAccepted(id: string, res: AcceptedResponse): Promise<void> {
-    const msgToUpdate = await this.repository.getMessageById(id);
-    if (!msgToUpdate) {
-      return;
-    }
-
-    msgToUpdate.status = 'accepted';
     if (res.serverStartedAt) {
-      msgToUpdate.serverStartedAt = res.serverStartedAt;
       await this.syncState.setServerStartedAt(res.serverStartedAt);
     }
-    await this.repository.updateMessage(msgToUpdate)
+    await this.repository.confirmAccepted(id, res.serverStartedAt)
       .catch(err => console.error('Failed to update message metadata', err));
   }
 

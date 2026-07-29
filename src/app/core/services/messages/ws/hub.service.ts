@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
 import { isMobile } from '@core/utils/device';
@@ -14,6 +14,7 @@ export type HubEvent = MessageEvent | ReceiptEvent;
 export class HubService implements OnDestroy {
   private authService = inject(AuthService);
   private socket$?: WebSocketSubject<HubEvent>;
+  private socketSubscription?: Subscription;
 
   private reconnectDelay = 5000;
   private reconnectTimeoutId?: any;
@@ -59,14 +60,22 @@ export class HubService implements OnDestroy {
     const baseUrl = environment.baseUrlHub;
     const url = `${baseUrl}/ws?token=${encodeURIComponent(token)}`;
 
-    this.socket$ = webSocket<HubEvent>({
+    const socket$ = webSocket<HubEvent>({
       url,
       openObserver: {
-        next: () => this.connectedSubject.next()
+        // Ignore a late open from a socket we've already replaced.
+        next: () => {
+          if (this.socket$ === socket$) {
+            this.connectedSubject.next();
+          }
+        }
       }
     });
+    this.socket$ = socket$;
 
-    this.socket$.subscribe({
+    // Drop the previous subscription so a torn-down socket's async close/error can't drive state.
+    this.socketSubscription?.unsubscribe();
+    this.socketSubscription = socket$.subscribe({
       next: (message) => {
         if ('event' in message) {
           switch (message.event) {
@@ -86,10 +95,17 @@ export class HubService implements OnDestroy {
         }
       },
       error: (err) => {
+        // A stale socket (already replaced by a newer connect) must not trigger a reconnect.
+        if (this.socket$ !== socket$) {
+          return;
+        }
         console.error('Hub WebSocket error:', err);
         this.scheduleReconnect();
       },
       complete: () => {
+        if (this.socket$ !== socket$) {
+          return;
+        }
         console.warn('Hub WebSocket connection closed');
         this.scheduleReconnect();
       }
@@ -121,10 +137,7 @@ export class HubService implements OnDestroy {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = undefined;
     }
-    if (this.socket$) {
-      this.socket$.complete();
-      this.socket$ = undefined;
-    }
+    this.teardownSocket();
     this.connect();
   }
 
@@ -142,6 +155,16 @@ export class HubService implements OnDestroy {
     this.reconnectTimeoutId = setTimeout(() => {
       this.connect();
     }, this.reconnectDelay);
+  }
+
+  /** Unsubscribe and complete the current socket so its async callbacks can't drive state. */
+  private teardownSocket(): void {
+    this.socketSubscription?.unsubscribe();
+    this.socketSubscription = undefined;
+    if (this.socket$) {
+      this.socket$.complete();
+      this.socket$ = undefined;
+    }
   }
 
   public get messages(): Observable<EncryptedMessage> {
@@ -172,10 +195,7 @@ export class HubService implements OnDestroy {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = undefined;
     }
-    if (this.socket$) {
-      this.socket$.complete();
-      this.socket$ = undefined;
-    }
+    this.teardownSocket();
   }
 
   ngOnDestroy(): void {

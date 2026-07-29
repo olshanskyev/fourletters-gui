@@ -40,6 +40,24 @@ export class MessagesRepository {
   }
 
   /**
+   * Atomically mark a sent message as accepted by the Server, persisting serverStartedAt. Never
+   * downgrades
+   */
+  async confirmAccepted(id: string, serverStartedAt?: number): Promise<void> {
+    await this.db.transaction(this.db.messages, async () => {
+      const msg = await this.db.messages.get(id);
+      if (!msg) return;
+      if (serverStartedAt) {
+        msg.serverStartedAt = serverStartedAt;
+      }
+      if (msg.status === 'pending') {
+        msg.status = 'accepted';
+      }
+      await this.db.messages.put(msg);
+    });
+  }
+
+  /**
    * Bulk insert messages
    */
   async saveMessages(messages: LocalMessage[]): Promise<void> {
