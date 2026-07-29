@@ -20,10 +20,13 @@ export class HubService implements OnDestroy {
   private socket$?: WebSocketSubject<HubEvent>;
   private socketSubscription?: Subscription;
   private reconnectTimeoutId?: any;
+  private wakeTimeoutId?: any;
   /** True until connect() and again after disconnect(), so a wake event can't silently reconnect. */
   private stopped = true;
 
   private static readonly RECONNECT_DELAY_MS = 5000;
+  /** Collapse the online/pageshow/visibilitychange burst one resume fires into a single reopen. */
+  private static readonly WAKE_DEBOUNCE_MS = 300;
 
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
@@ -54,6 +57,7 @@ export class HubService implements OnDestroy {
   /** (Re)open the socket, always discarding any previous one first so only one can exist. */
   private openSocket(): void {
     this.clearReconnectTimer();
+    this.clearWakeTimer();
     this.teardownSocket();
 
     const token = this.authService.tokenReader.getAccessToken();
@@ -107,7 +111,20 @@ export class HubService implements OnDestroy {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
       return;
     }
-    this.openSocket();
+    // A single resume fires several of these events back-to-back; wait out the burst and reopen once.
+    if (this.wakeTimeoutId) {
+      return;
+    }
+    this.wakeTimeoutId = setTimeout(() => {
+      this.wakeTimeoutId = undefined;
+      if (this.stopped) {
+        return;
+      }
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      this.openSocket();
+    }, HubService.WAKE_DEBOUNCE_MS);
   }
 
   private scheduleReconnect(): void {
@@ -116,6 +133,13 @@ export class HubService implements OnDestroy {
     }
     this.teardownSocket();
     this.reconnectTimeoutId = setTimeout(() => this.openSocket(), HubService.RECONNECT_DELAY_MS);
+  }
+
+  private clearWakeTimer(): void {
+    if (this.wakeTimeoutId) {
+      clearTimeout(this.wakeTimeoutId);
+      this.wakeTimeoutId = undefined;
+    }
   }
 
   private clearReconnectTimer(): void {
@@ -158,6 +182,7 @@ export class HubService implements OnDestroy {
   public disconnect(): void {
     this.stopped = true;
     this.clearReconnectTimer();
+    this.clearWakeTimer();
     this.teardownSocket();
   }
 
