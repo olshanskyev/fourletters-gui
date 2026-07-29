@@ -3,11 +3,15 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
-import { isMobile } from '@core/utils/device';
 import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData } from '@dto/models';
 
 export type HubEvent = MessageEvent | ReceiptEvent;
 
+/**
+ * Single live WebSocket to the Hub. The whole design rests on one invariant: every (re)connect
+ * tears down the previous socket first, so at most one socket ever exists. That alone guarantees
+ * "one connection per user" - no in-flight flags, no supersede handshake.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -15,16 +19,11 @@ export class HubService implements OnDestroy {
   private authService = inject(AuthService);
   private socket$?: WebSocketSubject<HubEvent>;
   private socketSubscription?: Subscription;
-
-  private reconnectDelay = 5000;
   private reconnectTimeoutId?: any;
-  private isIntentionallyDisconnected = false;
-  /** True while a socket is being established (subscribed but not yet open/closed). */
-  private isConnecting = false;
-  /** Timestamp of the last connection attempt, used to avoid churning a freshly opened socket. */
-  private lastConnectAt = 0;
-  /** A mobile wake within this window of a fresh connect won't force a needless reconnect. */
-  private static readonly WAKE_RECONNECT_MIN_AGE_MS = 3000;
+  /** True until connect() and again after disconnect(), so a wake event can't silently reconnect. */
+  private stopped = true;
+
+  private static readonly RECONNECT_DELAY_MS = 5000;
 
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
@@ -46,16 +45,16 @@ export class HubService implements OnDestroy {
     }
   }
 
+  /** Open the connection (idempotent). Called once when the user is authenticated. */
   public connect(): void {
-    if (this.socket$ && !this.socket$.closed) {
-      return;
-    }
+    this.stopped = false;
+    this.openSocket();
+  }
 
-    this.isIntentionallyDisconnected = false;
-    if (this.reconnectTimeoutId) {
-      clearTimeout(this.reconnectTimeoutId);
-      this.reconnectTimeoutId = undefined;
-    }
+  /** (Re)open the socket, always discarding any previous one first so only one can exist. */
+  private openSocket(): void {
+    this.clearReconnectTimer();
+    this.teardownSocket();
 
     const token = this.authService.tokenReader.getAccessToken();
     if (!token) {
@@ -63,132 +62,75 @@ export class HubService implements OnDestroy {
       return;
     }
 
-    const baseUrl = environment.baseUrlHub;
-    const url = `${baseUrl}/ws?token=${encodeURIComponent(token)}`;
-
-    this.lastConnectAt = Date.now();
-    this.isConnecting = true;
+    const url = `${environment.baseUrlHub}/ws?token=${encodeURIComponent(token)}`;
     const socket$ = webSocket<HubEvent>({
       url,
-      openObserver: {
-        // Ignore a late open from a socket we've already replaced.
-        next: () => {
-          if (this.socket$ === socket$) {
-            this.isConnecting = false;
-            this.connectedSubject.next();
-          }
-        }
-      }
+      openObserver: { next: () => this.connectedSubject.next() }
     });
     this.socket$ = socket$;
-
-    // Drop the previous subscription so a torn-down socket's async close/error can't drive state.
-    this.socketSubscription?.unsubscribe();
     this.socketSubscription = socket$.subscribe({
-      next: (message) => {
-        if ('event' in message) {
-          switch (message.event) {
-            case MessageEventEventEnum.MessageReceived:
-              this.messagesSubject.next(message.data as EncryptedMessage);
-              break;
-            case ReceiptEventEventEnum.MessageDelivered:
-              this.messageDeliveredSubject.next(message.data as ReceiptData);
-              break;
-            case ReceiptEventEventEnum.MessageRead:
-              this.messageReadSubject.next(message.data as ReceiptData);
-              break;
-            case ReceiptEventEventEnum.MessageUndecryptable:
-              this.messageUndecryptableSubject.next(message.data as ReceiptData);
-              break;
-          }
-        }
-      },
-      error: (err) => {
-        // A stale socket (already replaced by a newer connect) must not trigger a reconnect.
-        if (this.socket$ !== socket$) {
-          return;
-        }
-        this.isConnecting = false;
-        console.error('Hub WebSocket error:', err);
-        this.scheduleReconnect();
-      },
-      complete: () => {
-        if (this.socket$ !== socket$) {
-          return;
-        }
-        this.isConnecting = false;
-        console.warn('Hub WebSocket connection closed');
-        this.scheduleReconnect();
-      }
+      next: (message) => this.dispatch(message),
+      error: () => this.scheduleReconnect(),
+      complete: () => this.scheduleReconnect()
     });
   }
 
+  private dispatch(message: HubEvent): void {
+    if (!('event' in message)) {
+      return;
+    }
+    switch (message.event) {
+      case MessageEventEventEnum.MessageReceived:
+        this.messagesSubject.next(message.data as EncryptedMessage);
+        break;
+      case ReceiptEventEventEnum.MessageDelivered:
+        this.messageDeliveredSubject.next(message.data as ReceiptData);
+        break;
+      case ReceiptEventEventEnum.MessageRead:
+        this.messageReadSubject.next(message.data as ReceiptData);
+        break;
+      case ReceiptEventEventEnum.MessageUndecryptable:
+        this.messageUndecryptableSubject.next(message.data as ReceiptData);
+        break;
+    }
+  }
+
   /**
-   * Re-establish the connection when the app becomes visible again. iOS/Android can suspend a
-   * backgrounded tab and silently kill the socket without ever firing close/error, so a genuine
-   * disconnect goes unnoticed. On mobile we therefore reconnect on any wake; on desktop we only
-   * act when the socket already looks closed (a real close there fires scheduleReconnect anyway).
+   * Reconnect when the app returns to the foreground or the network comes back. iOS/Android can
+   * suspend a backgrounded tab and kill the socket without firing close/error, leaving a zombie;
+   * reopening (which first tears down the old socket) heals that in every case.
    */
   private onWake(): void {
-    if (this.isIntentionallyDisconnected) {
+    if (this.stopped) {
       return;
     }
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
       return;
     }
-    // A connection attempt is already in flight: let it resolve instead of opening a second socket.
-    // This collapses the burst of wake events (visibilitychange + pageshow + online) into one.
-    if (this.isConnecting) {
-      return;
-    }
-    const socketDead = !this.socket$ || this.socket$.closed;
-    if (socketDead) {
-      this.forceReconnect();
-      return;
-    }
-    // Socket still looks alive. On mobile a wake can reveal a zombie socket, so reconnect - but not
-    // when we just connected (e.g. a visibility/pageshow event right after a cold-start connect),
-    // which would needlessly tear down a genuinely fresh socket and open a second one.
-    if (isMobile && Date.now() - this.lastConnectAt >= HubService.WAKE_RECONNECT_MIN_AGE_MS) {
-      this.forceReconnect();
-    }
+    this.openSocket();
   }
 
-  /** Tear down any existing socket (dead or zombie) and connect immediately. */
-  private forceReconnect(): void {
+  private scheduleReconnect(): void {
+    if (this.stopped || this.reconnectTimeoutId) {
+      return;
+    }
+    this.teardownSocket();
+    this.reconnectTimeoutId = setTimeout(() => this.openSocket(), HubService.RECONNECT_DELAY_MS);
+  }
+
+  private clearReconnectTimer(): void {
     if (this.reconnectTimeoutId) {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = undefined;
     }
-    this.teardownSocket();
-    this.connect();
-  }
-
-  private scheduleReconnect(): void {
-    if (this.isIntentionallyDisconnected) {
-      return;
-    }
-
-    if (this.reconnectTimeoutId) {
-      clearTimeout(this.reconnectTimeoutId);
-    }
-
-    this.socket$ = undefined;
-
-    this.reconnectTimeoutId = setTimeout(() => {
-      this.connect();
-    }, this.reconnectDelay);
   }
 
   /** Unsubscribe and complete the current socket so its async callbacks can't drive state. */
   private teardownSocket(): void {
-    this.isConnecting = false;
     this.socketSubscription?.unsubscribe();
     this.socketSubscription = undefined;
-    if (this.socket$) {
-      this.socket$.complete();
-      this.socket$ = undefined;
-    }
+    this.socket$?.complete();
+    this.socket$ = undefined;
   }
 
   public get messages(): Observable<EncryptedMessage> {
@@ -214,11 +156,8 @@ export class HubService implements OnDestroy {
 
 
   public disconnect(): void {
-    this.isIntentionallyDisconnected = true;
-    if (this.reconnectTimeoutId) {
-      clearTimeout(this.reconnectTimeoutId);
-      this.reconnectTimeoutId = undefined;
-    }
+    this.stopped = true;
+    this.clearReconnectTimer();
     this.teardownSocket();
   }
 

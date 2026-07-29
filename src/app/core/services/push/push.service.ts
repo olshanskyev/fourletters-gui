@@ -13,6 +13,7 @@ import { PushSubscription as PushSubscriptionDto } from '@dto/models';
 interface PushNotificationData {
   senderId?: string;
   groupId?: string;
+  conversationId?: string;
 }
 
 /**
@@ -150,12 +151,14 @@ export class PushService {
     if (tag && !this.passesLocalDebounce(tag)) return;
     try {
       const registration = await navigator.serviceWorker.ready;
+      // Navigate the already-running (backgrounded) app straight to this conversation
+      const url = data.conversationId ? `/m/${data.conversationId}` : '/m';
       await registration.showNotification(title, {
         body,
         data: {
           ...data,
           onActionClick: {
-            default: { operation: 'openWindow', url: '/m' }
+            default: { operation: 'navigateLastFocusedOrOpen', url }
           }
         },
         tag,
@@ -237,10 +240,10 @@ export class PushService {
 
   private async onNotificationClick(data: PushNotificationData): Promise<void> {
     try {
-      let conversationId: string | undefined;
-      if (data.groupId) {
+      let conversationId = data.conversationId;
+      if (!conversationId && data.groupId) {
         conversationId = await this.conversations.ensureGroupConversation(data.groupId);
-      } else if (data.senderId) {
+      } else if (!conversationId && data.senderId) {
         conversationId = await this.conversations.ensureDirectConversation(data.senderId);
       }
 

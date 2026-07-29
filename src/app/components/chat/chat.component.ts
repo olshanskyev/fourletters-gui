@@ -13,7 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { toSignal, toObservable, rxResource, takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { switchMap, of, Subject, bufferTime, filter } from 'rxjs';
+import { switchMap, of, Subject, bufferTime, filter, fromEvent } from 'rxjs';
 import { SettingsService } from '@core/services/shared/settings.service';
 import { LocalMessage } from '@core/services/messages/models/messages.model';
 import { ObserveVisibilityDirective } from './observe-visibility.directive';
@@ -134,6 +134,10 @@ export class ChatComponent {
   // batched read receipt instead of one request per message.
   private readQueue = new Subject<LocalMessage>();
 
+  // Messages seen while the app was backgrounded. We must NOT tell the sender they were read until
+  // the user actually brings the app to the foreground, so they are held here and flushed on return.
+  private pendingReads = new Map<string, LocalMessage>();
+
   constructor() {
     this.readQueue.pipe(
       bufferTime(400),
@@ -143,6 +147,17 @@ export class ChatComponent {
       const unique = [...new Map(batch.map((m) => [m.id, m])).values()];
       this.messagesService.markManyAsRead(unique);
     });
+
+    // When the app returns to the foreground, release any read receipts deferred while hidden.
+    if (typeof document !== 'undefined') {
+      fromEvent(document, 'visibilitychange').pipe(
+        takeUntilDestroyed(),
+      ).subscribe(() => {
+        if (document.visibilityState === 'visible') {
+          this.flushPendingReads();
+        }
+      });
+    }
   }
 
   messageText = signal<string>('');
@@ -179,10 +194,27 @@ export class ChatComponent {
   }
 
   onMessageVisible(msg: LocalMessage) {
-    if (!msg.isMine && msg.status !== 'read') {
-      // Queue for a batched read receipt (see readQueue).
+    if (msg.isMine || msg.status === 'read') {
+      return;
+    }
+    // Never send a read receipt while the app is backgrounded (e.g. the chat was left open, or a
+    // notification-driven navigation briefly mounted it). Defer until the user actually returns.
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      this.pendingReads.set(msg.id, msg);
+      return;
+    }
+    // Queue for a batched read receipt (see readQueue).
+    this.readQueue.next(msg);
+  }
+
+  private flushPendingReads() {
+    if (this.pendingReads.size === 0) {
+      return;
+    }
+    for (const msg of this.pendingReads.values()) {
       this.readQueue.next(msg);
     }
+    this.pendingReads.clear();
   }
 
   messageAvatar(senderId: string): string | undefined {

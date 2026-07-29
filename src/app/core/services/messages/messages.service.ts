@@ -300,7 +300,7 @@ export class MessagesService {
       body = `${senderName}: ${preview}`;
     }
     await this.pushService.showLocalNotification(
-      view.title, body, { senderId, groupId }, view.avatarUrl
+      view.title, body, { senderId, groupId, conversationId }, view.avatarUrl
     );
   }
 
