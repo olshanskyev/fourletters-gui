@@ -18,6 +18,7 @@ import { SettingsService } from '@core/services/shared/settings.service';
 import { LocalMessage } from '@core/services/messages/models/messages.model';
 import { ObserveVisibilityDirective } from './observe-visibility.directive';
 import { DecryptMessagePipe } from './decrypt-message.pipe';
+import { ConnectionStatus } from '../widgets/connection-status';
 import { MessagesService } from '@core/services/messages/messages.service';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { UsersService } from '@core/services/users/users.service';
@@ -56,7 +57,8 @@ const PHOTO_OPTIONS = {
     ObserveVisibilityDirective,
     DecryptMessagePipe,
     TranslateModule,
-    MatMenuModule
+    MatMenuModule,
+    ConnectionStatus
   ],
 })
 export class ChatComponent {

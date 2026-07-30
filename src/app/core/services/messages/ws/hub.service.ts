@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy, inject } from '@angular/core';
+import { Injectable, OnDestroy, inject, signal } from '@angular/core';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
@@ -6,6 +6,9 @@ import { AuthService } from '../../authentication/auth.service';
 import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData } from '@dto/models';
 
 export type HubEvent = MessageEvent | ReceiptEvent;
+
+/** Coarse hub connection state for the UI (e.g. a progress/status indicator). */
+export type HubConnectionState = 'connecting' | 'connected' | 'disconnected';
 
 /**
  * Single live WebSocket to the Hub. The whole design rests on one invariant: every (re)connect
@@ -21,12 +24,18 @@ export class HubService implements OnDestroy {
   private socketSubscription?: Subscription;
   private reconnectTimeoutId?: any;
   private wakeTimeoutId?: any;
+  private pingTimeoutId?: any;
   /** True until connect() and again after disconnect(), so a wake event can't silently reconnect. */
   private stopped = true;
 
   private static readonly RECONNECT_DELAY_MS = 5000;
   /** Collapse the online/pageshow/visibilitychange burst one resume fires into a single reopen. */
   private static readonly WAKE_DEBOUNCE_MS = 500;
+  /** How long to wait for a pong before treating a resumed socket as a silently-dropped zombie. */
+  private static readonly PING_TIMEOUT_MS = 1500;
+
+  /** Coarse connection state a UI can bind to (progress bar, status chip). */
+  readonly connectionState = signal<HubConnectionState>('disconnected');
 
   private readonly messagesSubject = new Subject<EncryptedMessage>();
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
@@ -58,18 +67,26 @@ export class HubService implements OnDestroy {
   private openSocket(): void {
     this.clearReconnectTimer();
     this.clearWakeTimer();
+    this.clearPingTimer();
     this.teardownSocket();
 
     const token = this.authService.tokenReader.getAccessToken();
     if (!token) {
       console.warn('Cannot connect to hub without a token');
+      this.connectionState.set('disconnected');
       return;
     }
 
+    this.connectionState.set('connecting');
     const url = `${environment.baseUrlHub}/ws?token=${encodeURIComponent(token)}`;
     const socket$ = webSocket<HubEvent>({
       url,
-      openObserver: { next: () => this.connectedSubject.next() }
+      openObserver: {
+        next: () => {
+          this.connectionState.set('connected');
+          this.connectedSubject.next();
+        }
+      }
     });
     this.socket$ = socket$;
     this.socketSubscription = socket$.subscribe({
@@ -80,6 +97,11 @@ export class HubService implements OnDestroy {
   }
 
   private dispatch(message: HubEvent): void {
+    // Application-level pong: answer to our resume-time liveness probe; proves the socket is alive.
+    if ((message as { type?: string }).type === 'pong') {
+      this.clearPingTimer();
+      return;
+    }
     if (!('event' in message)) {
       return;
     }
@@ -101,8 +123,9 @@ export class HubService implements OnDestroy {
 
   /**
    * Reconnect when the app returns to the foreground or the network comes back. iOS/Android can
-   * suspend a backgrounded tab and kill the socket without firing close/error, leaving a zombie;
-   * reopening (which first tears down the old socket) heals that in every case.
+   * suspend a backgrounded tab and kill the socket without firing close/error, leaving a zombie.
+   * Rather than blindly reopening (which forces a redundant inbox resync on every foreground), we
+   * actively probe the existing socket first and only reopen when it fails to answer.
    */
   private onWake(): void {
     if (this.stopped) {
@@ -111,7 +134,7 @@ export class HubService implements OnDestroy {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
       return;
     }
-    // A single resume fires several of these events back-to-back; wait out the burst and reopen once.
+    // A single resume fires several of these events back-to-back; wait out the burst and probe once.
     if (this.wakeTimeoutId) {
       return;
     }
@@ -123,14 +146,43 @@ export class HubService implements OnDestroy {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return;
       }
-      this.openSocket();
+      this.probeOrReopen();
     }, HubService.WAKE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Test whether the current socket is still alive: send an application-level ping and wait for the
+   * Hub's pong.
+   */
+  private probeOrReopen(): void {
+    // No socket, or already reconnecting: just (re)open.
+    if (!this.socket$ || this.connectionState() === 'connecting') {
+      this.openSocket();
+      return;
+    }
+    // A probe is already in flight; let it resolve.
+    if (this.pingTimeoutId) {
+      return;
+    }
+    this.pingTimeoutId = setTimeout(() => {
+      this.pingTimeoutId = undefined;
+      this.openSocket();
+    }, HubService.PING_TIMEOUT_MS);
+    try {
+      this.socket$.next({ type: 'ping' } as unknown as HubEvent);
+    } catch {
+      // Sending on an already-broken socket - reopen immediately.
+      this.clearPingTimer();
+      this.openSocket();
+    }
   }
 
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimeoutId) {
       return;
     }
+    this.clearPingTimer();
+    this.connectionState.set('disconnected');
     this.teardownSocket();
     this.reconnectTimeoutId = setTimeout(() => this.openSocket(), HubService.RECONNECT_DELAY_MS);
   }
@@ -139,6 +191,13 @@ export class HubService implements OnDestroy {
     if (this.wakeTimeoutId) {
       clearTimeout(this.wakeTimeoutId);
       this.wakeTimeoutId = undefined;
+    }
+  }
+
+  private clearPingTimer(): void {
+    if (this.pingTimeoutId) {
+      clearTimeout(this.pingTimeoutId);
+      this.pingTimeoutId = undefined;
     }
   }
 
@@ -183,7 +242,9 @@ export class HubService implements OnDestroy {
     this.stopped = true;
     this.clearReconnectTimer();
     this.clearWakeTimer();
+    this.clearPingTimer();
     this.teardownSocket();
+    this.connectionState.set('disconnected');
   }
 
   ngOnDestroy(): void {

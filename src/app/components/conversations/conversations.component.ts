@@ -7,6 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { ListLayoutComponent } from '@layouts/list-layout/list-layout.component';
 import { UserButton } from '../widgets/user-button';
+import { ConnectionStatus } from '../widgets/connection-status';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatMenuModule } from '@angular/material/menu';
@@ -14,6 +15,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MasterViewService } from '@core/services/shared/master-view.service';
 import { PushService } from '@core/services/push/push.service';
 import { SettingsService } from '@core/services/shared/settings.service';
+import { HubService } from '@core/services/messages/ws/hub.service';
 
 @Component({
   selector: 'app-conversations',
@@ -30,6 +32,7 @@ import { SettingsService } from '@core/services/shared/settings.service';
     MatButtonModule,
     MatIconModule,
     UserButton,
+    ConnectionStatus,
     MatMenuModule,
     MatDividerModule,
   ],
@@ -39,6 +42,7 @@ export class ConversationsComponent {
   private masterViewService = inject(MasterViewService);
   private pushService = inject(PushService);
   locale = inject(SettingsService).locale;
+  readonly connectionState = inject(HubService).connectionState;
 
   // Automatically streams and sorts conversations from IndexedDB
   conversations = toSignal(this.conversationsService.observeConversationViews(), {

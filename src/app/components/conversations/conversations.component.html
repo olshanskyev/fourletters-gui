@@ -2,7 +2,11 @@
     <div header class="default-header justify-content-between gap-8">
       <app-user-button />
       <mat-form-field class="form-field-5 w-full" appearance="outline" subscriptSizing="dynamic">
-        <mat-icon matSuffix>search</mat-icon>
+        @if (connectionState() === 'connected') {
+          <mat-icon matSuffix>search</mat-icon>
+        } @else {
+          <app-connection-status matSuffix/>
+        }
         <mat-label>Search</mat-label>
         <input matInput/>
       </mat-form-field>

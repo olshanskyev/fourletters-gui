@@ -109,7 +109,7 @@ export class UserDatabase extends Dexie {
 export class AppDatabase {
   private _db: UserDatabase | null = null;
   private _userId: string | null = null;
-  private initWaiters: Array<() => void> = [];
+  private initWaiters: (() => void)[] = [];
 
   get isInitialized(): boolean {
     return this._db !== null;

@@ -1,10 +1,18 @@
 @use '@angular/material' as mat;
+@use '../../../styles/grid/breakpoints' as bp;
 
 :host {
   display: block;
   height: 100%;
 
   --vertical-padding: 0.75rem;
+}
+
+// The connection status shows in the chat header only on mobile
+.connection-status.-mobile {
+  @include bp.bp-gt(large) {
+    display: none;
+  }
 }
 
 app-chat-layout {
