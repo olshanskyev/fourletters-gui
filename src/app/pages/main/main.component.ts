@@ -1,4 +1,12 @@
-import { Component, effect, input, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  afterNextRender,
+  effect,
+  input,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, Location } from '@angular/common';
 import { NavigationEnd, NavigationStart, Router, RouterModule } from '@angular/router';
@@ -44,9 +52,6 @@ export class MainComponent {
    */
   readonly suppressAnimation = signal(false);
 
-  /** Guards the one-time history seeding done for deep links (see the NavigationEnd handler). */
-  private historySeeded = false;
-
   constructor() {
     this.router.events
       .pipe(
@@ -58,13 +63,17 @@ export class MainComponent {
       )
       .subscribe((event) => {
         if (event instanceof NavigationStart) {
-          this.suppressAnimation.set(event.navigationTrigger === 'popstate');
-        } else {
-          // Re-enable animation after the popstate-driven DOM update has settled.
-          this.suppressAnimation.set(false);
-          this.seedConversationsHistory(event);
+          if (event.navigationTrigger === 'popstate') {
+            this.suppressAnimation.set(true);
+          }
+        } else if (this.suppressAnimation()) {
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => this.suppressAnimation.set(false)),
+          );
         }
       });
+
+    afterNextRender(() => this.seedConversationsHistory());
 
     effect(() => {
       const inviteTargetId = this.inviteTargetId();
@@ -77,19 +86,16 @@ export class MainComponent {
   /**
    * When the app cold-starts directly on a chat (e.g. opened from a push notification at
    * `/m/:id`), there is no `/m` entry behind it, so the back gesture would leave the app. Insert
-   * a `/m` entry before the current one on that first navigation so back returns to the
-   * conversations list.
+   * a `/m` entry before the current one on that first load so back returns to the conversations
+   * list.
    */
-  private seedConversationsHistory(event: NavigationEnd): void {
-    if (this.historySeeded) {
+  private seedConversationsHistory(): void {
+    const id = this.id();
+    if (!id) {
       return;
     }
-    this.historySeeded = true;
-
-    if (this.id()) {
-      this.location.replaceState('/m');
-      this.location.go(event.urlAfterRedirects);
-    }
+    this.location.replaceState('/m');
+    this.location.go(`/m/${id}`);
   }
 
   private async handleInvite(inviteTargetId: string) {

@@ -5,7 +5,7 @@
   display: block;
   height: 100%;
 
-  --vertical-padding: 0.75rem;
+  --v-padding: 0.75rem;
 }
 
 // The connection status shows in the chat header only on mobile
@@ -26,12 +26,12 @@ app-chat-layout {
 .chat-header {
   position: relative;
   height: 3rem;
-  margin-top: var(--vertical-padding);
+  margin-top: var(--v-padding);
   border-radius: var(--mat-sys-corner-full);
 }
 
 .chat-bottom {
-  margin-bottom: var(--vertical-padding);
+  margin-bottom: var(--v-padding);
 }
 
 .chat-header::before,
@@ -44,11 +44,11 @@ app-chat-layout {
 }
 
 .chat-header::before {
-  inset: calc(-1 * var(--vertical-padding) - env(safe-area-inset-top)) 0 50%;
+  inset: calc(-1 * var(--v-padding) - env(safe-area-inset-top)) 0 50%;
 }
 
 .chat-bottom::after {
-  inset: 50% 0 calc(-1 * var(--vertical-padding));
+  inset: 50% 0 calc(-1 * var(--v-padding));
 }
 
 .message-bubble {
