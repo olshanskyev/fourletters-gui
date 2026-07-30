@@ -65,6 +65,17 @@ export class MessagesRepository {
   }
 
   /**
+   * Count the received (not-mine, non-system) messages in a conversation that are not yet read.
+   * This is the source of truth used to reconcile a conversation's unread counter.
+   */
+  async countUnreadByConversation(conversationId: string): Promise<number> {
+    return this.db.messages
+      .where('conversationId').equals(conversationId)
+      .filter(m => m.kind !== 'system' && !m.isMine && m.status !== 'read')
+      .count();
+  }
+
+  /**
    * Get all messages for a specific conversation as a one-time fetch
    */
   async getMessagesByConversation(conversationId: string): Promise<LocalMessage[]> {

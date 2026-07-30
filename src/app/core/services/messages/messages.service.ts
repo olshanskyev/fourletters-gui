@@ -443,19 +443,16 @@ export class MessagesService {
       return;
     }
 
-    // Local: flip to read and decrement the unread count per conversation in one write each.
+    // Local: flip to read and reconcile the conversation's unread count from the actual messages.
     for (const m of unread) {
       m.status = 'read';
     }
     await this.repository.saveMessages(unread)
       .catch(err => console.error('Failed to update local messages as read', err));
 
-    const perConversation = new Map<string, number>();
-    for (const m of unread) {
-      perConversation.set(m.conversationId, (perConversation.get(m.conversationId) ?? 0) + 1);
-    }
-    for (const [conversationId, count] of perConversation) {
-      await this.conversationsService.adjustUnreadCount(conversationId, -count);
+    const conversationIds = new Set(unread.map(m => m.conversationId));
+    for (const conversationId of conversationIds) {
+      await this.reconcileUnreadCount(conversationId);
     }
 
     // Network: one batch of individually-signed read receipts.
@@ -475,6 +472,15 @@ export class MessagesService {
     } catch (err) {
       console.error('Failed to send read receipts:', err);
     }
+  }
+
+  /**
+   * Reconcile a conversation's stored unread counter with the true number of unread received
+   * messages.
+   */
+  async reconcileUnreadCount(conversationId: string): Promise<void> {
+    const count = await this.repository.countUnreadByConversation(conversationId);
+    await this.conversationsService.setUnreadCount(conversationId, count);
   }
 
   /**

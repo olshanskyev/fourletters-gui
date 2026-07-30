@@ -118,6 +118,10 @@ export class ConversationsService {
     await this.repository.adjustUnreadCount(id, delta);
   }
 
+  async setUnreadCount(id: string, value: number): Promise<void> {
+    await this.repository.setUnreadCount(id, value);
+  }
+
   // ---- internal helpers ------------------------------------------------------------------
 
   /** The id of the direct conversation with a peer, if one exists. */

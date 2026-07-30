@@ -46,6 +46,19 @@ export class ConversationsRepository {
   }
 
   /**
+   * Set a conversation's unread count to an absolute value (clamped at 0). Used to reconcile the
+   * incrementally-maintained counter with the true number of unread messages.
+   */
+  async setUnreadCount(id: string, value: number): Promise<void> {
+    await this.db.transaction(this.db.conversations, async () => {
+      const c = await this.db.conversations.get(id);
+      if (!c) return;
+      c.unreadCount = Math.max(0, value);
+      await this.db.conversations.put(c);
+    });
+  }
+
+  /**
    * Get all conversations one-time fetch
    */
   async getAllConversations(): Promise<LocalConversation[]> {

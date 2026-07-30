@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, resource, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, resource, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatLayoutComponent } from '@layouts/chat-layout/chat-layout.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -160,6 +160,15 @@ export class ChatComponent {
         }
       });
     }
+
+    // Opening a conversation reconciles its unread counter with the actual messages, healing any
+    // stale badge left behind when a message ended up read without a matching counter decrement.
+    effect(() => {
+      const id = this.conversationId();
+      if (id) {
+        this.messagesService.reconcileUnreadCount(id);
+      }
+    });
   }
 
   messageText = signal<string>('');
