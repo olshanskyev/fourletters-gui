@@ -1,6 +1,8 @@
 import { Component, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { version } from '../../../../package.json';
+
 @Component({
   selector: 'app-about',
   templateUrl: './about.component.html',
@@ -9,4 +11,6 @@ import { RouterLink } from '@angular/router';
   encapsulation: ViewEncapsulation.None,
   imports: [RouterLink],
 })
-export class AboutComponent {}
+export class AboutComponent {
+  protected readonly version = version;
+}
