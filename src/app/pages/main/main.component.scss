@@ -1,4 +1,5 @@
 @use '../../../styles/grid/breakpoints' as bp;
+@use '../../../styles/helpers/slide' as *;
 
 :host {
   display: block;
@@ -24,25 +25,37 @@
 
 :host ::ng-deep .adaptive-layout {
   @include bp.bp-lt(medium) {
-    // Mobile: master takes full width and detail is hidden by default
+    // Mobile: panes are stacked and slide horizontally like a sliding-panel
+    position: relative;
+    overflow: hidden;
+
     .master-pane {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
+      height: 100%;
       border-right: none;
+      @include slide('center');
     }
 
     .detail-pane {
-      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
+      height: 100%;
+      @include slide('right');
     }
 
-    // Mobile: when chat is open, master is hidden and detail is full width
+    // Mobile: when chat is open, master slides out to the left and detail slides in
     &.has-chat {
       .master-pane {
-        display: none;
+        @include slide('left');
       }
 
       .detail-pane {
-        display: flex;
+        @include slide('center');
       }
     }
   }

@@ -7,12 +7,13 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideRouter, withComponentInputBinding, RouteReuseStrategy } from '@angular/router';
 import { provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideHotToastConfig } from '@ngxpert/hot-toast';
 import { routes } from './app.routes';
 import { BASE_URL_SERVER, StartupService, TranslateLangService, interceptors } from './core';
+import { SameComponentRouteReuseStrategy } from './core/utils/same-component-route-reuse.strategy';
 import { NgxPermissionsModule } from 'ngx-permissions';
 import { environment } from '../environments/environment';
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
@@ -25,6 +26,7 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     { provide: BASE_URL_SERVER, useValue: environment.baseUrlServer },
     provideRouter(routes, withComponentInputBinding()),
+    { provide: RouteReuseStrategy, useClass: SameComponentRouteReuseStrategy },
     provideHotToastConfig(),
     provideAppInitializer(() => inject(TranslateLangService).load()),
     provideAppInitializer(() => inject(StartupService).load()),

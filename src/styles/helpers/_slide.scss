@@ -1,0 +1,15 @@
+@use 'sass:map';
+
+// Horizontal offsets for a sliding panel, keyed by its resting position.
+$slide-positions: (
+  'center': 0,
+  'left': -100%,
+  'right': 100%,
+);
+
+// Slides an element horizontally to the given position with the shared
+// transition. Usage: `@include slide('right');`
+@mixin slide($direction: 'center') {
+  transform: translateX(map.get($slide-positions, $direction));
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}

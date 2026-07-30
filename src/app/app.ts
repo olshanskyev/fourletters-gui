@@ -2,7 +2,6 @@ import { Component, ChangeDetectionStrategy, inject, isDevMode } from '@angular/
 import { RouterOutlet } from '@angular/router';
 import { NgProgressbar } from 'ngx-progressbar';
 import { NgProgressHttp } from 'ngx-progressbar/http';
-import { NgProgressRouter } from 'ngx-progressbar/router';
 import { AuthService } from '@core/services/authentication';
 
 declare global {
@@ -13,9 +12,9 @@ declare global {
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, NgProgressbar, NgProgressRouter, NgProgressHttp],
+  imports: [RouterOutlet, NgProgressbar, NgProgressHttp],
   template: `
-    <ng-progress ngProgressHttp ngProgressRouter />
+    <ng-progress ngProgressHttp />
     <router-outlet />
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
