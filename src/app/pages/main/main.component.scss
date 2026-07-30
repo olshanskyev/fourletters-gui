@@ -58,6 +58,15 @@
         @include slide('center');
       }
     }
+
+    // Skip the slide transition for browser/OS back-gesture (popstate) navigation, where the
+    // native swipe already animates the page and our transition would play a second time.
+    &.no-slide-animation {
+      .master-pane,
+      .detail-pane {
+        transition: none;
+      }
+    }
   }
 
   // Hide the chat's back button on desktop since we always see both panes

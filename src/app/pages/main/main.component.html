@@ -1,4 +1,8 @@
-<app-split-layout [class.has-chat]="!!id()" class="adaptive-layout h-full">
+<app-split-layout
+  [class.has-chat]="!!id()"
+  [class.no-slide-animation]="suppressAnimation()"
+  class="adaptive-layout h-full"
+>
   <div master class="h-full relative overflow-hidden">
     <div class="sliding-panel" [class.slide-out]="masterViewService.currentView() !== 'conversations'">
       <app-conversations />

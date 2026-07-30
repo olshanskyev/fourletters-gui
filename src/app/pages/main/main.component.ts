@@ -1,6 +1,8 @@
-import { Component, effect, input, inject, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { Router, RouterModule } from '@angular/router';
+import { Component, effect, input, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { CommonModule, Location } from '@angular/common';
+import { NavigationEnd, NavigationStart, Router, RouterModule } from '@angular/router';
+import { filter } from 'rxjs';
 import { SplitLayoutComponent } from '@layouts/split-layout/split-layout.component';
 import { ChatComponent } from '@components/chat/chat.component';
 import { ConversationsComponent } from '@components/conversations/conversations.component';
@@ -32,16 +34,62 @@ export class MainComponent {
 
   private readonly conversationsService = inject(ConversationsService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly authService = inject(AuthService);
   readonly masterViewService = inject(MasterViewService);
 
+  /**
+   * Suppresses the master/detail slide transition when navigation is driven by the browser/OS
+   * back gesture (popstate)
+   */
+  readonly suppressAnimation = signal(false);
+
+  /** Guards the one-time history seeding done for deep links (see the NavigationEnd handler). */
+  private historySeeded = false;
+
   constructor() {
+    this.router.events
+      .pipe(
+        filter(
+          (event): event is NavigationStart | NavigationEnd =>
+            event instanceof NavigationStart || event instanceof NavigationEnd,
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((event) => {
+        if (event instanceof NavigationStart) {
+          this.suppressAnimation.set(event.navigationTrigger === 'popstate');
+        } else {
+          // Re-enable animation after the popstate-driven DOM update has settled.
+          this.suppressAnimation.set(false);
+          this.seedConversationsHistory(event);
+        }
+      });
+
     effect(() => {
       const inviteTargetId = this.inviteTargetId();
       if (inviteTargetId) {
         this.handleInvite(inviteTargetId);
       }
     });
+  }
+
+  /**
+   * When the app cold-starts directly on a chat (e.g. opened from a push notification at
+   * `/m/:id`), there is no `/m` entry behind it, so the back gesture would leave the app. Insert
+   * a `/m` entry before the current one on that first navigation so back returns to the
+   * conversations list.
+   */
+  private seedConversationsHistory(event: NavigationEnd): void {
+    if (this.historySeeded) {
+      return;
+    }
+    this.historySeeded = true;
+
+    if (this.id()) {
+      this.location.replaceState('/m');
+      this.location.go(event.urlAfterRedirects);
+    }
   }
 
   private async handleInvite(inviteTargetId: string) {
