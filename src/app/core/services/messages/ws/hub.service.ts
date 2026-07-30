@@ -27,6 +27,8 @@ export class HubService implements OnDestroy {
   private pingTimeoutId?: any;
   /** True until connect() and again after disconnect(), so a wake event can't silently reconnect. */
   private stopped = true;
+  /** Guards the async open path so a wake/reconnect can't start a second concurrent connect. */
+  private opening = false;
 
   private static readonly RECONNECT_DELAY_MS = 5000;
   /** Collapse the online/pageshow/visibilitychange burst one resume fires into a single reopen. */
@@ -60,40 +62,63 @@ export class HubService implements OnDestroy {
   /** Open the connection (idempotent). Called once when the user is authenticated. */
   public connect(): void {
     this.stopped = false;
-    this.openSocket();
+    void this.openSocket();
   }
 
   /** (Re)open the socket, always discarding any previous one first so only one can exist. */
-  private openSocket(): void {
-    this.clearReconnectTimer();
-    this.clearWakeTimer();
-    this.clearPingTimer();
-    this.teardownSocket();
-
-    const token = this.authService.tokenReader.getAccessToken();
-    if (!token) {
-      console.warn('Cannot connect to hub without a token');
-      this.connectionState.set('disconnected');
+  private async openSocket(): Promise<void> {
+    // The open path is async (it may await a token refresh), so guard against a wake or a
+    // reconnect timer starting a second concurrent connect while the first is still in flight.
+    if (this.opening) {
       return;
     }
+    this.opening = true;
+    try {
+      this.clearReconnectTimer();
+      this.clearWakeTimer();
+      this.clearPingTimer();
+      this.teardownSocket();
 
-    this.connectionState.set('connecting');
-    const url = `${environment.baseUrlHub}/ws?token=${encodeURIComponent(token)}`;
-    const socket$ = webSocket<HubEvent>({
-      url,
-      openObserver: {
-        next: () => {
-          this.connectionState.set('connected');
-          this.connectedSubject.next();
-        }
+      this.connectionState.set('connecting');
+      const token = await this.acquireValidToken();
+
+      // disconnect() may have run while we awaited the refresh; don't resurrect the socket.
+      if (this.stopped) {
+        this.connectionState.set('disconnected');
+        return;
       }
-    });
-    this.socket$ = socket$;
-    this.socketSubscription = socket$.subscribe({
-      next: (message) => this.dispatch(message),
-      error: () => this.scheduleReconnect(),
-      complete: () => this.scheduleReconnect()
-    });
+      if (!token) {
+        console.warn('Cannot connect to hub without a valid token');
+        this.connectionState.set('disconnected');
+        this.scheduleReconnect();
+        return;
+      }
+      const url = `${environment.baseUrlHub}/ws?token=${encodeURIComponent(token)}`;
+      const socket$ = webSocket<HubEvent>({
+        url,
+        openObserver: {
+          next: () => {
+            this.connectionState.set('connected');
+            this.connectedSubject.next();
+          }
+        }
+      });
+      this.socket$ = socket$;
+      this.socketSubscription = socket$.subscribe({
+        next: (message) => this.dispatch(message),
+        error: () => this.scheduleReconnect(),
+        complete: () => this.scheduleReconnect()
+      });
+    } finally {
+      this.opening = false;
+    }
+  }
+
+  /**
+   * Return a currently-valid access token to open the socket with
+   */
+  private acquireValidToken(): Promise<string | undefined> {
+    return this.authService.getFreshAccessToken();
   }
 
   private dispatch(message: HubEvent): void {
@@ -157,7 +182,7 @@ export class HubService implements OnDestroy {
   private probeOrReopen(): void {
     // No socket, or already reconnecting: just (re)open.
     if (!this.socket$ || this.connectionState() === 'connecting') {
-      this.openSocket();
+      void this.openSocket();
       return;
     }
     // A probe is already in flight; let it resolve.
@@ -166,14 +191,14 @@ export class HubService implements OnDestroy {
     }
     this.pingTimeoutId = setTimeout(() => {
       this.pingTimeoutId = undefined;
-      this.openSocket();
+      void this.openSocket();
     }, HubService.PING_TIMEOUT_MS);
     try {
       this.socket$.next({ type: 'ping' } as unknown as HubEvent);
     } catch {
       // Sending on an already-broken socket - reopen immediately.
       this.clearPingTimer();
-      this.openSocket();
+      void this.openSocket();
     }
   }
 
@@ -184,7 +209,7 @@ export class HubService implements OnDestroy {
     this.clearPingTimer();
     this.connectionState.set('disconnected');
     this.teardownSocket();
-    this.reconnectTimeoutId = setTimeout(() => this.openSocket(), HubService.RECONNECT_DELAY_MS);
+    this.reconnectTimeoutId = setTimeout(() => void this.openSocket(), HubService.RECONNECT_DELAY_MS);
   }
 
   private clearWakeTimer(): void {

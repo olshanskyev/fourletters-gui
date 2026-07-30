@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, map, of, shareReplay, take, tap, from, switchMap } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay, take, tap, from, switchMap, firstValueFrom } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { TokenService } from './token.service';
@@ -160,6 +160,18 @@ export class AuthService {
     );
 
     return this.refreshInFlight$;
+  }
+
+  /**
+   * Return a currently-usable access token, refreshing first when the cached one is missing or
+   * expired
+   */
+  async getFreshAccessToken(): Promise<string | undefined> {
+    if (this.tokenService.isTokenValid()) {
+      return this.tokenService.getAccessToken();
+    }
+    const refreshed = await firstValueFrom(this.refresh());
+    return refreshed ? this.tokenService.getAccessToken() : undefined;
   }
 
   logout() {
