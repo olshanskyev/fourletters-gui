@@ -44,7 +44,7 @@ import { InviteDialogComponent } from '../dialogs/invite-dialog/invite-dialog.co
       </button>
       <button mat-menu-item (click)="openInviteDialog()">
         <mat-icon>person_add</mat-icon>
-        <span>Invite friends</span>
+        <span>Add friends</span>
       </button>
       <button mat-menu-item (click)="logout()">
         <mat-icon>exit_to_app</mat-icon>

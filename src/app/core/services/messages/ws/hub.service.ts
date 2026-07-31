@@ -209,7 +209,8 @@ export class HubService implements OnDestroy {
     this.clearPingTimer();
     this.connectionState.set('disconnected');
     this.teardownSocket();
-    this.reconnectTimeoutId = setTimeout(() => void this.openSocket(), HubService.RECONNECT_DELAY_MS);
+    this.reconnectTimeoutId = setTimeout(() => void this.openSocket(),
+      HubService.RECONNECT_DELAY_MS);
   }
 
   private clearWakeTimer(): void {

@@ -2,7 +2,6 @@ import {
   Component,
   inject,
   signal,
-  afterNextRender,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -67,6 +66,9 @@ function parseInviteTargetId(text: string): string | undefined {
           (input)="onLinkInput($event)"
           placeholder="https://.../m/invite/..."
         />
+        <button mat-icon-button matSuffix matTooltip="Paste" (click)="pasteFromClipboard()">
+          <mat-icon>content_paste</mat-icon>
+        </button>
       </mat-form-field>
 
       @if (checking()) {
@@ -122,25 +124,24 @@ export class InviteDialogComponent {
   readonly notFound = signal(false);
   readonly isOwnLink = signal(false);
 
-  constructor() {
-    afterNextRender(() => this.prefillFromClipboard());
-  }
-
   onLinkInput(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.pastedLink.set(value);
     this.checkLink(value);
   }
 
-  private async prefillFromClipboard(): Promise<void> {
+  /**
+   * Read the invite link from the clipboard on an explicit user tap.
+   */
+  async pasteFromClipboard(): Promise<void> {
     try {
       const text = await navigator.clipboard?.readText();
-      if (text && parseInviteTargetId(text)) {
+      if (text) {
         this.pastedLink.set(text);
         this.checkLink(text);
       }
     } catch {
-      // Clipboard access denied/unavailable — nothing to prefill.
+      // Clipboard access denied/unavailable — the user can paste manually.
     }
   }
 

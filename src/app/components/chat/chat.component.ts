@@ -173,7 +173,9 @@ export class ChatComponent {
 
   messageText = signal<string>('');
 
-  openChatDetails() {
+  openChatDetails(event: Event) {
+    // Drop focus from the header button so it isn't left in an active/focused
+    (event.currentTarget as HTMLElement | null)?.blur();
     this.sidePanelService.open(ChatDetailsComponent, {
       conversationView: this.conversation.value(),
     });
