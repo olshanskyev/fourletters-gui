@@ -13,14 +13,20 @@ if [ -f /etc/nginx/conf.d/default.conf ]; then
   fi
 fi
 
-# Replace placeholders of the form __VAR__ in the built app and nginx config.
+# Replace placeholders of the form __VAR__ in the runtime config and nginx config.
 # List the variable names (space separated) in SUBSTITUTE_VARS.
+#
+# Only config.json (a non-fingerprinted file loaded at app startup) and the nginx config are
+# rewritten. Fingerprinted bundles (main-*.js, etc.) are never touched, so their bytes keep
+# matching the SHA1 hashes recorded in ngsw.json and the service worker can install updates.
 if [ -n "$SUBSTITUTE_VARS" ]; then
   for var in $SUBSTITUTE_VARS; do
     val=$(printenv "$var")
     if [ -n "$val" ]; then
-      echo "Replacing __${var}__ in /usr/share/nginx/html"
-      find /usr/share/nginx/html -type f -exec sed -i "s|__${var}__|${val}|g" {} +
+      if [ -f /usr/share/nginx/html/config.json ]; then
+        echo "Replacing __${var}__ in config.json"
+        sed -i "s|__${var}__|${val}|g" /usr/share/nginx/html/config.json
+      fi
 
       if [ -f /etc/nginx/conf.d/default.conf ]; then
         echo "Replacing __${var}__ in nginx config"

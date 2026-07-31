@@ -30,7 +30,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    { provide: BASE_URL_SERVER, useValue: environment.baseUrlServer },
+    { provide: BASE_URL_SERVER, useFactory: () => environment.baseUrlServer },
     provideRouter(routes, withComponentInputBinding()),
     { provide: RouteReuseStrategy, useClass: SameComponentRouteReuseStrategy },
     provideHotToastConfig(),

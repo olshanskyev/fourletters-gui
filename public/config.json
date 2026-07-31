@@ -1,0 +1,9 @@
+{
+  "baseUrlServer": "__BASE_URL_SERVER__",
+  "baseUrlHub": "__BASE_URL_HUB__",
+  "vkAppId": "__VK_APP_ID__",
+  "googleClientId": "__GOOGLE_CLIENT_ID__",
+  "redirectUrl": "__OAUTH_REDIRECT_URL__",
+  "umamiWebsiteId": "__UMAMI_WEBSITE_ID__",
+  "vapidPublicKey": "__PUSH_VAPID_PUBLIC_KEY__"
+}
