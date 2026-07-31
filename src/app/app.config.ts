@@ -14,6 +14,7 @@ import { provideHotToastConfig } from '@ngxpert/hot-toast';
 import { routes } from './app.routes';
 import {
   AppUpdateService,
+  BackGestureService,
   BASE_URL_SERVER,
   StartupService,
   TranslateLangService,
@@ -37,6 +38,7 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(TranslateLangService).load()),
     provideAppInitializer(() => inject(StartupService).load()),
     provideAppInitializer(() => inject(AppUpdateService).load()),
+    provideAppInitializer(() => inject(BackGestureService).load()),
     provideHttpClient(withXhr(), withInterceptors([progressInterceptor, ...interceptors])),
     provideNgProgressHttp({}),
     provideTranslateService({

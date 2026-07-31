@@ -1,6 +1,5 @@
 import {
   Component,
-  afterNextRender,
   effect,
   input,
   inject,
@@ -8,7 +7,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule, Location } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { NavigationEnd, NavigationStart, Router, RouterModule } from '@angular/router';
 import { filter } from 'rxjs';
 import { SplitLayoutComponent } from '@layouts/split-layout/split-layout.component';
@@ -43,7 +42,6 @@ export class MainComponent {
 
   private readonly conversationsService = inject(ConversationsService);
   private readonly router = inject(Router);
-  private readonly location = inject(Location);
   private readonly authService = inject(AuthService);
   private readonly usersService = inject(UsersService);
   readonly masterViewService = inject(MasterViewService);
@@ -75,29 +73,12 @@ export class MainComponent {
         }
       });
 
-    afterNextRender(() => this.seedConversationsHistory());
-
     effect(() => {
       const inviteTargetId = this.inviteTargetId();
       if (inviteTargetId) {
         this.handleInvite(inviteTargetId);
       }
     });
-  }
-
-  /**
-   * When the app cold-starts directly on a chat (e.g. opened from a push notification at
-   * `/m/:id`), there is no `/m` entry behind it, so the back gesture would leave the app. Insert
-   * a `/m` entry before the current one on that first load so back returns to the conversations
-   * list.
-   */
-  private seedConversationsHistory(): void {
-    const id = this.id();
-    if (!id) {
-      return;
-    }
-    this.location.replaceState('/m');
-    this.location.go(`/m/${id}`);
   }
 
   private async handleInvite(inviteTargetId: string) {
