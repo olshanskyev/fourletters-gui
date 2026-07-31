@@ -12,7 +12,13 @@ import { provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideHotToastConfig } from '@ngxpert/hot-toast';
 import { routes } from './app.routes';
-import { BASE_URL_SERVER, StartupService, TranslateLangService, interceptors } from './core';
+import {
+  AppUpdateService,
+  BASE_URL_SERVER,
+  StartupService,
+  TranslateLangService,
+  interceptors,
+} from './core';
 import { SameComponentRouteReuseStrategy } from './core/utils/same-component-route-reuse.strategy';
 import { NgxPermissionsModule } from 'ngx-permissions';
 import { environment } from '../environments/environment';
@@ -30,6 +36,7 @@ export const appConfig: ApplicationConfig = {
     provideHotToastConfig(),
     provideAppInitializer(() => inject(TranslateLangService).load()),
     provideAppInitializer(() => inject(StartupService).load()),
+    provideAppInitializer(() => inject(AppUpdateService).load()),
     provideHttpClient(withXhr(), withInterceptors([progressInterceptor, ...interceptors])),
     provideNgProgressHttp({}),
     provideTranslateService({

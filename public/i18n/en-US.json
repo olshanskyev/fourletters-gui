@@ -34,5 +34,7 @@
   "register_welcome": "Welcome",
   "unknown_contact": "Unknown contact",
   "system_identity_changed": "Security identity changed — this contact may have reinstalled the app or switched device",
-  "system_identity_changed_group": "{{name}}'s security identity changed — they may have reinstalled the app or switched device"
+  "system_identity_changed_group": "{{name}}'s security identity changed — they may have reinstalled the app or switched device",
+  "update_available": "A new version is available.",
+  "reload": "Reload"
 }
