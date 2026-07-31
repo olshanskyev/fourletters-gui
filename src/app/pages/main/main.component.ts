@@ -17,6 +17,7 @@ import { ConversationsComponent } from '@components/conversations/conversations.
 import { ContactsComponent } from '@components/contacts/contacts.component';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { AuthService } from '@core/services/authentication/auth.service';
+import { UsersService } from '@core/services/users/users.service';
 import { MasterViewService } from '@core/services/shared/master-view.service';
 import { CreateGroupComponent } from '@components/create-group/create-group.component';
 
@@ -44,6 +45,7 @@ export class MainComponent {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly authService = inject(AuthService);
+  private readonly usersService = inject(UsersService);
   readonly masterViewService = inject(MasterViewService);
 
   /**
@@ -100,19 +102,26 @@ export class MainComponent {
 
   private async handleInvite(inviteTargetId: string) {
     const currentUser = this.authService.currentUser();
-    // Prevent opening a chat with oneself if necessary (or just let the service handle it)
-    if (currentUser?.id !== inviteTargetId) {
-      try {
-        const conversationId =
-          await this.conversationsService.ensureDirectConversation(inviteTargetId);
-        // Redirect to the regular chat route
-        this.router.navigate(['/m', conversationId], { replaceUrl: true });
-      } catch (e) {
-        console.error('Failed to create/open conversation from invite:', e);
+    // If it's your own invite link, just go back to main
+    if (currentUser?.id === inviteTargetId) {
+      this.router.navigate(['/m'], { replaceUrl: true });
+      return;
+    }
+
+    try {
+      // Verify the invited user is registered before creating a conversation
+      const profile = await this.usersService.lookupUser(inviteTargetId);
+      if (!profile) {
         this.router.navigate(['/m'], { replaceUrl: true });
+        return;
       }
-    } else {
-      // If it's your own invite link, just go back to main
+      await this.usersService.cacheProfile(profile);
+      const conversationId =
+        await this.conversationsService.ensureDirectConversation(inviteTargetId);
+      // Redirect to the regular chat route
+      this.router.navigate(['/m', conversationId], { replaceUrl: true });
+    } catch (e) {
+      console.error('Failed to create/open conversation from invite:', e);
       this.router.navigate(['/m'], { replaceUrl: true });
     }
   }

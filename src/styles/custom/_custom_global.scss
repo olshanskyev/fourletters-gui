@@ -105,7 +105,8 @@
 
 .invite-dialog {
   width: 400px;
-  max-width: 90vw;
+  max-width: 90vw !important;
+  max-height: 90vh !important;
 }
 
 .action-button {
