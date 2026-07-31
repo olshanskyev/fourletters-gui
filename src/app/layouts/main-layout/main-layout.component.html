@@ -1,4 +1,7 @@
-<mat-sidenav-container class="h-full pattern-overlay">
+<mat-sidenav-container
+    class="h-full pattern-overlay"
+    [class.no-drawer-animation]="sidePanelService.suppressAnimation()"
+>
     <mat-sidenav
         #sidenav
         class="h-full auto-width"

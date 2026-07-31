@@ -31,7 +31,7 @@ export class AppUpdateService {
     const action = this.translate.instant('reload');
 
     this.snackBar
-      .open(message, action)
+      .open(message, action, { panelClass: 'snackbar-safe-area' })
       .onAction()
       .subscribe(async () => {
         await this.updates.activateUpdate();

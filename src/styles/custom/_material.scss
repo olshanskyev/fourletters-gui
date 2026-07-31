@@ -33,3 +33,8 @@ mat-form-field.message-input {
   }
 }
 
+/* Keep bottom-positioned snackbars clear of the iOS home-indicator safe area. */
+.snackbar-safe-area {
+  margin-bottom: env(safe-area-inset-bottom) !important;
+}
+

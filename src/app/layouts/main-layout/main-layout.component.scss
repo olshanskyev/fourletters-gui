@@ -23,6 +23,16 @@ mat-sidenav-content {
   background-color: transparent !important;
 }
 
+// Skip the drawer slide when the panel is closed by a browser/OS back gesture, where the native
+// swipe already animates and our transition would play a second time.
+::ng-deep .no-drawer-animation {
+  .mat-drawer,
+  .mat-drawer-content,
+  .mat-drawer-backdrop {
+    transition: none !important;
+  }
+}
+
 .auto-width {
   @include bp.bp-lt(small) {
     width: 100%;
