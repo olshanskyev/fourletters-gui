@@ -1,12 +1,10 @@
 import { Injectable, inject, DestroyRef, signal, computed } from '@angular/core';
 import { SwPush } from '@angular/service-worker';
 import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
 
 import { environment } from '@env/environment';
-import { AppDatabase } from '@core/services/database/app.database';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { SettingsService } from '@core/services/shared/settings.service';
 import { PushSubscription as PushSubscriptionDto } from '@dto/models';
@@ -29,8 +27,6 @@ interface PushNotificationData {
 export class PushService {
   private readonly swPush = inject(SwPush);
   private readonly httpClient = inject(HttpClient);
-  private readonly router = inject(Router);
-  private readonly appDb = inject(AppDatabase);
   private readonly conversations = inject(ConversationsService);
   private readonly settings = inject(SettingsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -38,9 +34,6 @@ export class PushService {
   /** Collapse bursts of local notifications from the same conversation (mirrors the server). */
   private static readonly LOCAL_DEBOUNCE_MS = 15_000;
   private readonly lastLocalNotificationAt = new Map<string, number>();
-
-  /** Max wait for the local DB before a notification click gives up and opens the list. */
-  private static readonly DB_WAIT_TIMEOUT_MS = 5_000;
 
   /** Fallback notification icon and monochrome status-bar badge (mirror the server payload). */
   private static readonly DEFAULT_ICON = '/web-app-manifest-192x192.png';
@@ -62,11 +55,8 @@ export class PushService {
   );
 
   constructor() {
-    if (this.swPush.isEnabled) {
-      this.swPush.notificationClicks
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe(event => this.onNotificationClick(event.notification.data));
-    }
+    // Notification taps are routed by ngsw itself via the deep-link URL in the push payload
+    // (see showLocalNotification / the server payload). No in-page click handler is required.
   }
 
   /**
@@ -155,15 +145,19 @@ export class PushService {
     const tag = data.groupId ?? data.senderId;
     if (tag && !this.passesLocalDebounce(tag)) return;
     try {
+      const kind = data.groupId ? 'group' : 'sender';
       const registration = await navigator.serviceWorker.ready;
       await registration.showNotification(title, {
         body,
         data: {
           ...data,
-          // Only bring the app to the foreground; all routing is done in onNotificationClick so
-          // there is a single source of truth (mirrors the server payload).
+          // Deep-link straight to the conversation: ngsw navigates the focused/opened window to
+          // this URL and the /m/notify route resolves sender/group to the local conversation, so
+          // no in-page click handler is needed (mirrors the server payload).
           onActionClick: {
-            default: { operation: 'focusLastFocusedOrOpen' }
+            default: tag
+              ? { operation: 'navigateLastFocusedOrOpen', url: `/m/notify/${kind}/${tag}` }
+              : { operation: 'focusLastFocusedOrOpen' }
           }
         },
         tag,
@@ -241,38 +235,5 @@ export class PushService {
       .post('/push/subscribe', dto)
       .pipe(catchError(() => of(null)))
       .subscribe();
-  }
-
-  private async onNotificationClick(data: PushNotificationData): Promise<void> {
-    try {
-      // A cold-start tap can deliver the click before auth restore initializes the local DB, so
-      // resolving the conversation would throw and fall back to the list. Wait for the DB (bounded,
-      // so a logged-out click still proceeds to /m and lets the route guard restore the session).
-      await this.waitForDatabase();
-
-      let conversationId = data.conversationId;
-      if (!conversationId && data.groupId) {
-        conversationId = await this.conversations.ensureGroupConversation(data.groupId);
-      } else if (!conversationId && data.senderId) {
-        conversationId = await this.conversations.ensureDirectConversation(data.senderId);
-      }
-
-      if (conversationId) {
-        await this.router.navigate(['/m', conversationId]);
-      } else {
-        await this.router.navigate(['/m']);
-      }
-    } catch (e) {
-      console.warn('Failed to open conversation from notification', e);
-      await this.router.navigate(['/m']);
-    }
-  }
-
-  /** Resolve once the local DB is ready, or after a bounded timeout (logged-out cold start). */
-  private waitForDatabase(): Promise<void> {
-    return Promise.race([
-      this.appDb.whenInitialized(),
-      new Promise<void>(resolve => setTimeout(resolve, PushService.DB_WAIT_TIMEOUT_MS))
-    ]);
   }
 }

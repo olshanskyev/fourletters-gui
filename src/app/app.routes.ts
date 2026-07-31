@@ -36,6 +36,7 @@ export const routes: Routes = [
     children: [
       { path: '', component: MainComponent },
       { path: 'invite/:inviteTargetId', component: MainComponent },
+      { path: 'notify/:notifyKind/:notifyId', component: MainComponent },
       { path: ':id', component: MainComponent }
     ]
   },

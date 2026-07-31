@@ -39,6 +39,8 @@ import { CreateGroupComponent } from '@components/create-group/create-group.comp
 export class MainComponent {
   readonly id = input<string>(); // Captures :id from the route
   readonly inviteTargetId = input<string>(); // Captures :inviteTargetId from the route
+  readonly notifyKind = input<string>(); // 'sender' | 'group' from the notification deep link
+  readonly notifyId = input<string>(); // sender/group id from the notification deep link
 
   private readonly conversationsService = inject(ConversationsService);
   private readonly router = inject(Router);
@@ -79,6 +81,31 @@ export class MainComponent {
         this.handleInvite(inviteTargetId);
       }
     });
+
+    effect(() => {
+      const kind = this.notifyKind();
+      const refId = this.notifyId();
+      if (kind && refId) {
+        this.handleNotify(kind, refId);
+      }
+    });
+  }
+
+  private async handleNotify(kind: string, refId: string) {
+    try {
+      // The guard on /m has already restored the session (so the local DB is ready). Resolve the
+      // server-known sender/group to the local conversation.
+      const conversationId =
+        kind === 'group'
+          ? await this.conversationsService.ensureGroupConversation(refId)
+          : await this.conversationsService.ensureDirectConversation(refId);
+      // Replace the transient notify URL with the conversations list, then push the chat on top
+      await this.router.navigate(['/m'], { replaceUrl: true });
+      await this.router.navigate(['/m', conversationId]);
+    } catch (e) {
+      console.error('Failed to open conversation from notification:', e);
+      this.router.navigate(['/m'], { replaceUrl: true });
+    }
   }
 
   private async handleInvite(inviteTargetId: string) {
@@ -99,8 +126,9 @@ export class MainComponent {
       await this.usersService.cacheProfile(profile);
       const conversationId =
         await this.conversationsService.ensureDirectConversation(inviteTargetId);
-      // Redirect to the regular chat route
-      this.router.navigate(['/m', conversationId], { replaceUrl: true });
+      // Replace the invite URL with the conversations list, then push the chat on top
+      await this.router.navigate(['/m'], { replaceUrl: true });
+      await this.router.navigate(['/m', conversationId]);
     } catch (e) {
       console.error('Failed to create/open conversation from invite:', e);
       this.router.navigate(['/m'], { replaceUrl: true });
