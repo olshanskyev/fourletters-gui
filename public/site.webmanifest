@@ -1,6 +1,9 @@
 {
   "name": "4letters",
   "short_name": "4letters",
+  "id": "/",
+  "start_url": "/m",
+  "scope": "/",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -17,5 +20,8 @@
   ],
   "theme_color": "#faf9fd",
   "background_color": "#faf9fd",
-  "display": "standalone"
+  "display": "standalone",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
 }

@@ -1,6 +1,7 @@
 import { Injectable, inject, DestroyRef, signal, computed } from '@angular/core';
 import { SwPush } from '@angular/service-worker';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
 
@@ -29,6 +30,7 @@ export class PushService {
   private readonly httpClient = inject(HttpClient);
   private readonly conversations = inject(ConversationsService);
   private readonly settings = inject(SettingsService);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Collapse bursts of local notifications from the same conversation (mirrors the server). */
@@ -55,8 +57,22 @@ export class PushService {
   );
 
   constructor() {
-    // Notification taps are routed by ngsw itself via the deep-link URL in the push payload
-    // (see showLocalNotification / the server payload). No in-page click handler is required.
+    // iOS won't navigate an already-open PWA window from the service worker (WindowClient.navigate
+    // is a no-op there), so when the app is alive we route the tap in-page from the click event.
+    if (this.swPush.isEnabled) {
+      this.swPush.notificationClicks
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe(({ notification }) => this.routeToConversation(notification.data));
+    }
+  }
+
+  /** Route a notification tap to its conversation via the shared /m/notify deep-link handler. */
+  private routeToConversation(data: PushNotificationData | undefined): void {
+    const kind = data?.groupId ? 'group' : data?.senderId ? 'sender' : undefined;
+    const refId = data?.groupId ?? data?.senderId;
+    if (kind && refId) {
+      this.router.navigateByUrl(`/m/notify/${kind}/${refId}`);
+    }
   }
 
   /**
