@@ -21,6 +21,7 @@ import {
   interceptors,
 } from './core';
 import { SameComponentRouteReuseStrategy } from './core/utils/same-component-route-reuse.strategy';
+import { TelemetryService } from './core/services/telemetry/telemetry.service';
 import { NgxPermissionsModule } from 'ngx-permissions';
 import { environment } from '../environments/environment';
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
@@ -35,6 +36,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     { provide: RouteReuseStrategy, useClass: SameComponentRouteReuseStrategy },
     provideHotToastConfig(),
+    provideAppInitializer(() => inject(TelemetryService).start()),
     provideAppInitializer(() => inject(TranslateLangService).load()),
     provideAppInitializer(() => inject(StartupService).load()),
     provideAppInitializer(() => inject(AppUpdateService).load()),
