@@ -9,6 +9,7 @@ import { MessagesService } from '@core/services/messages/messages.service';
 import { GroupsService } from '@core/services/groups/groups.service';
 import { IdentityService } from '@core/services/identity/identity.service';
 import { PushService } from '@core/services/push/push.service';
+import { StorageConsistencyService } from '@core/services/shared/storage-consistency.service';
 
 @Injectable({
   providedIn: 'root',
@@ -20,6 +21,7 @@ export class StartupService {
   private readonly groupsService = inject(GroupsService);
   private readonly identityService = inject(IdentityService);
   private readonly pushService = inject(PushService);
+  private readonly storageConsistency = inject(StorageConsistencyService);
   private readonly destroyRef = inject(DestroyRef);
 
   private currentUser$!: Observable<UserResponse | undefined>;
@@ -62,6 +64,8 @@ export class StartupService {
                     this.groupsService.syncGroups().catch(e => console.error('Failed to sync groups', e));
                     // Web Push registration is best-effort and must not block startup
                     this.pushService.initOnLogin().catch(e => console.error('Failed to enable push notifications', e));
+                    // Detect local message-store data loss; emits telemetry only on a count drop
+                    this.storageConsistency.start(user.id).catch(e => console.error('Storage consistency check failed', e));
                   } else {
                     this.messagesService.stopListening();
                   }

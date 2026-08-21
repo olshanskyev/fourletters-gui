@@ -53,6 +53,8 @@ export class MessagesRepository {
       if (msg.status === 'pending') {
         msg.status = 'accepted';
       }
+      // Accepted: clear the delivery-attempt counter so the post-restart re-push branch is eligible.
+      msg.retryCount = 0;
       await this.db.messages.put(msg);
     });
   }

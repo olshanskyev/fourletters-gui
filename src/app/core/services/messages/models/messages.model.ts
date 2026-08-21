@@ -22,7 +22,7 @@ interface BaseMessage {
   receivedAt?: number;
   status?: MessageStatus;
   serverStartedAt?: number; // For outbox resync when server restarts
-  retryCount?: number; // For outbox resync when server restarts
+  retryCount?: number; // delivery attempts: pending re-sends (failed after a budget) and the one post-restart re-push; reset to 0 on accept
   nackResent?: Set<string>; // recipientIds already re-keyed and resent once after an 'undecryptable' NACK
   cipher?: string; // exact wire ciphertext for idempotent resend
 }

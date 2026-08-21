@@ -196,7 +196,9 @@ export class SignalSessionService {
         Base64.base64ToBuffer(signatureB64)
       );
       return !invalid;
-    } catch {
+    } catch (e) {
+      // A throw here (vs a plain invalid result) means malformed key/signature bytes — surface it.
+      console.warn('Failed to verify receipt signature', e);
       return false;
     }
   }

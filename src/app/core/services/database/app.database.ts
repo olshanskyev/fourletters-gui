@@ -83,7 +83,9 @@ export class UserDatabase extends Dexie {
   signalRemoteIdentities!: Table<SignalRemoteIdentityRecord, string>;
 
   constructor(userId: string) {
-    super(`fourletters:${userId}`);
+    // 'strict' asks IndexedDB to flush to disk before a transaction completes (honored by Safari
+    // 15+), so a freshly sent outbox message survives an abrupt WebView jettison on iOS.
+    super(`fourletters:${userId}`, { chromeTransactionDurability: 'strict' });
 
     this.version(1).stores({
       messages: 'id, conversationId, createdAt, status',

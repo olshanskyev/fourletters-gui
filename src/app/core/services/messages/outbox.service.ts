@@ -29,6 +29,9 @@ export class OutboxService {
   private groups = inject(GroupsService);
   private auth = inject(AuthService);
 
+  /** How many times a still-pending send is retried (across reconnects) before it is failed. */
+  private static readonly MAX_SEND_ATTEMPTS = 5;
+
   async sendMessage(
     conversationId: string,
     text: string,
@@ -72,7 +75,7 @@ export class OutboxService {
       }
     } catch (err) {
       console.error('Failed to send message:', err);
-      await this.markFailed(message);
+      await this.bumpAttemptsOrFail(message);
     }
   }
 
@@ -151,7 +154,8 @@ export class OutboxService {
         await lastValueFrom(this.messagesApi.sendMessage(memberId, payload));
         nackResent.add(memberId);
         msg.nackResent = nackResent;
-        await this.repository.updateMessage(msg).catch(() => undefined);
+        await this.repository.updateMessage(msg)
+          .catch(err => console.warn('Failed to persist NACK resend state', err));
       } catch (err) {
         console.error('Failed to re-deliver group message after NACK:', msg.id, memberId, err);
       }
@@ -183,6 +187,7 @@ export class OutboxService {
     }
 
     msg.status = 'pending';
+    msg.retryCount = 0; // user-initiated resend gets a fresh retry budget
     await this.repository.updateMessage(msg);
 
     try {
@@ -192,7 +197,7 @@ export class OutboxService {
       }
     } catch (err) {
       console.error('Failed to resend message:', messageId, err);
-      await this.markFailed(msg);
+      await this.bumpAttemptsOrFail(msg);
     }
   }
 
@@ -269,7 +274,8 @@ export class OutboxService {
       messages.push({ messageId: msg.id, recipientId, payload });
     }
     // Persist any ciphertext freshly created above (e.g. a never-encrypted pending message).
-    await Promise.all(chunk.map(msg => this.repository.updateMessage(msg).catch(() => undefined)));
+    await Promise.all(chunk.map(msg => this.repository.updateMessage(msg)
+      .catch(err => console.warn('Failed to persist batched message cipher', err))));
 
     try {
       const res = await lastValueFrom(this.messagesApi.sendMessagesBatch(messages));
@@ -283,15 +289,16 @@ export class OutboxService {
           await this.repository.confirmAccepted(msg.id, res.serverStartedAt)
             .catch(err => console.error('Failed to update message metadata', err));
         } else if (msg.status === 'pending') {
-          await this.markFailed(msg);
+          await this.bumpAttemptsOrFail(msg);
         }
       }
     } catch (err) {
       console.error('Failed to resubmit batched messages:', err);
-      // The batch never reached the Server: fail the never-accepted ones for manual resend.
+      // The batch never reached the Server: count a retry for the never-accepted ones (or fail them
+      // once the budget is spent).
       for (const msg of chunk) {
         if (msg.status === 'pending') {
-          await this.markFailed(msg);
+          await this.bumpAttemptsOrFail(msg);
         }
       }
     }
@@ -311,7 +318,7 @@ export class OutboxService {
     } catch (err) {
       console.error('Failed to resync group message:', msg.id, err);
       if (wasPending) {
-        await this.markFailed(msg);
+        await this.bumpAttemptsOrFail(msg);
       }
     }
   }
@@ -352,7 +359,8 @@ export class OutboxService {
   private async sendDirect(msg: DirectMessage, recipientId: string)
     : Promise<AcceptedResponse | undefined> {
     const payload = await this.cipherFor(msg, recipientId);
-    await this.repository.updateMessage(msg).catch(() => undefined); // persist a freshly created cipher
+    await this.repository.updateMessage(msg)
+      .catch(err => console.warn('Failed to persist message cipher', err)); // freshly created cipher
     return lastValueFrom(this.messagesApi.sendMessage(recipientId, payload, msg.id));
   }
 
@@ -378,7 +386,8 @@ export class OutboxService {
       ).payload;
       msg.epoch = epoch;
       msg.cipher = payload;
-      await this.repository.updateMessage(msg).catch(() => undefined);
+      await this.repository.updateMessage(msg)
+        .catch(err => console.warn('Failed to persist group message cipher', err));
     }
 
     return lastValueFrom(this.messagesApi.sendGroupMessage(groupId, payload, msg.id));
@@ -450,6 +459,21 @@ export class OutboxService {
     }
     await this.repository.confirmAccepted(id, res.serverStartedAt)
       .catch(err => console.error('Failed to update message metadata', err));
+  }
+
+  /**
+   * Count a failed send attempt for a still-pending message: keep it pending (so the next
+   * reconnect-triggered resync retries it) until the budget is spent, then mark it failed.
+   */
+  private async bumpAttemptsOrFail(msg: LocalMessage): Promise<void> {
+    const attempts = (msg.retryCount ?? 0) + 1;
+    if (attempts >= OutboxService.MAX_SEND_ATTEMPTS) {
+      await this.markFailed(msg);
+      return;
+    }
+    msg.retryCount = attempts;
+    await this.repository.updateMessage(msg)
+      .catch(err => console.warn('Failed to persist send attempt count', err));
   }
 
   /** Mark a message as failed (not accepted by the Server) so the user can resend it manually. */

@@ -180,7 +180,8 @@ export class TelemetryService {
           },
           body: JSON.stringify(toBatch(this.resource(), records))
         })
-          .then(() => this.db.records.bulkDelete(ids(records)))
+          // fetch resolves for every HTTP status; only drop records the server actually accepted.
+          .then(response => response.ok ? this.db.records.bulkDelete(ids(records)) : undefined)
           .catch(() => undefined);
       });
   }

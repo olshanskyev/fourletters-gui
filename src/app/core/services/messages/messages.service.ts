@@ -66,39 +66,60 @@ export class MessagesService {
     // init subscriptions to live events from the Hub
     this.incomingSubscription = this.hubService.messages.pipe(
       concatMap(async (encryptedMessage) => {
-        // Live arrival: may raise a local notification if the app is backgrounded but connected.
-        const receipts = await this.processIncomingMessage(encryptedMessage, true);
-        await this.flushReceipts(receipts);
+        try {
+          // Live arrival: may raise a local notification if the app is backgrounded but connected.
+          const receipts = await this.processIncomingMessage(encryptedMessage, true);
+          await this.flushReceipts(receipts);
+        } catch (err) {
+          // Never let one bad event error the stream and stop live delivery for the session.
+          console.error('Failed to handle incoming message:', err);
+        }
       })
     ).subscribe();
 
     this.deliveredSubscription = this.hubService.messageDelivered.pipe(
       concatMap(async (receipt) => {
-        if (await this.checkReceiptSignature(receipt)) {
-          await this.outboxService.processReceipt(receipt.messageId, 'delivered');
+        try {
+          if (await this.checkReceiptSignature(receipt)) {
+            await this.outboxService.processReceipt(receipt.messageId, 'delivered');
+          }
+        } catch (err) {
+          console.error('Failed to process delivered receipt:', err);
         }
       })
     ).subscribe();
 
     this.readSubscription = this.hubService.messageRead.pipe(
       concatMap(async (receipt) => {
-        if (await this.checkReceiptSignature(receipt)) {
-          await this.outboxService.processReceipt(receipt.messageId, 'read');
+        try {
+          if (await this.checkReceiptSignature(receipt)) {
+            await this.outboxService.processReceipt(receipt.messageId, 'read');
+          }
+        } catch (err) {
+          console.error('Failed to process read receipt:', err);
         }
       })
     ).subscribe();
 
     this.undecryptableSubscription = this.hubService.messageUndecryptable.pipe(
       concatMap(async (receipt) => {
-        if (await this.checkReceiptSignature(receipt)) {
-          await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
+        try {
+          if (await this.checkReceiptSignature(receipt)) {
+            await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
+          }
+        } catch (err) {
+          console.error('Failed to process undecryptable NACK:', err);
         }
       })
     ).subscribe();
 
     this.keyChangedSubscription = this.contactsService.keyChanged$.pipe(
       concatMap(async ({ userId }) => {
-        await this.insertIdentityChangedNotice(userId);
+        try {
+          await this.insertIdentityChangedNotice(userId);
+        } catch (err) {
+          console.error('Failed to insert identity-changed notice:', err);
+        }
       })
     ).subscribe();
 
@@ -112,16 +133,14 @@ export class MessagesService {
           return;
         }
         await this.syncInbox();
+        // Reconnect is the best moment to retry unsent messages: connectivity just returned.
+        await this.outboxService.resync();
       })
     ).subscribe();
 
-    // Initial sync + outbox resync.
+    // Initial sync + outbox resync (both self-handle their own errors).
     void this.syncInbox();
-    try {
-      this.outboxService.resync();
-    } catch (err) {
-      console.error('Failed to resync outbox messages after startup:', err);
-    }
+    void this.outboxService.resync();
   }
 
   /**
@@ -153,8 +172,9 @@ export class MessagesService {
       // Process receipts for messages we sent that were delivered/read while we were offline
       for (const receipt of res.receipts || []) {
         if (!(await this.checkReceiptSignature(receipt))) {
-          console.warn('Invalid receipt signature dropped', receipt);
-        } else if (receipt.type === ReceiptType.Undecryptable) {
+          continue;
+        }
+        if (receipt.type === ReceiptType.Undecryptable) {
           await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
         } else {
           await this.outboxService.processReceipt(receipt.messageId, receipt.type as 'delivered' | 'read');
@@ -166,9 +186,14 @@ export class MessagesService {
   }
 
   private async checkReceiptSignature(receipt: ReceiptData): Promise<boolean> {
-    return await this.secureMsg.verifyReceipt(
+    const valid = await this.secureMsg.verifyReceipt(
         receipt.messageId, receipt.type, receipt.recipientId, receipt.signature
     );
+    if (!valid) {
+      // Single drop point, so no caller silently ignores a rejected receipt.
+      console.warn('Dropped receipt with invalid signature', receipt.messageId, receipt.type);
+    }
+    return valid;
   }
 
   private async processIncomingMessage(encryptedMessage: EncryptedMessage | any, notify: boolean)

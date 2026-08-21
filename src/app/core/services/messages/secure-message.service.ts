@@ -142,6 +142,7 @@ export class SecureMessageService {
     try {
       envelope = JSON.parse(plaintext);
     } catch {
+      // Authenticated plaintext that isn't an envelope: a plain (non-enveloped) chat body.
       const { content, ts } = this.contentFromBody(undefined);
       return { kind: 'chat', content, ts };
     }
@@ -163,6 +164,7 @@ export class SecureMessageService {
     try {
       candidate = JSON.parse(plaintext);
     } catch {
+      // Authenticated plaintext that isn't JSON: fall back to a plain body.
       candidate = undefined;
     }
     return this.contentFromBody(candidate);
