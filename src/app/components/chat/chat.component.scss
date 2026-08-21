@@ -68,6 +68,12 @@ app-chat-layout {
     opacity: 0.8;
   }
 
+  .chat-link {
+    color: inherit;
+    word-break: break-all;
+    text-decoration: underline;
+  }
+
   &.mine {
     color: var(--mat-sys-on-primary);
     background-color: var(--mat-sys-primary);

@@ -49,6 +49,7 @@
     "@vkid/sdk": "^2.6.5",
     "dexie": "^4.4.3",
     "google-one-tap": "^1.0.6",
+    "linkifyjs": "^4.3.3",
     "ngx-permissions": "^19.0.0",
     "ngx-progressbar": "^14.0.0",
     "rxjs": "~7.8.2",

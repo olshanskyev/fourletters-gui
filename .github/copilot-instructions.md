@@ -77,7 +77,6 @@ The application follows a standard Angular architecture with the following key c
 - **`public`**: Contains static assets such as images, fonts, and data files.
 
 ### Additional Coding Preferences
-- Keep project dependencies minimal
 - Use styles already defined in project
 - Use relative imports for neigbors and path aliases for outer packages
 - Use apostrophes for strings declarations

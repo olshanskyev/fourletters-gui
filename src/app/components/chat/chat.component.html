@@ -91,7 +91,21 @@
                         />
                       }
                     } @else {
-                      <div>{{ msg | decryptMessage | async }}</div>
+                      <div>
+                        @for (part of (msg | decryptMessage | async | linkify); track $index) {
+                          @if (part.href) {
+                            <a
+                              class="chat-link"
+                              [href]="part.href"
+                              target="_blank"
+                              rel="noopener noreferrer nofollow"
+                              >{{ part.text }}</a
+                            >
+                          } @else {
+                            {{ part.text }}
+                          }
+                        }
+                      </div>
                     }
                     <div class="bubble-footer">
                       <div></div>
