@@ -133,16 +133,22 @@ export class AuthService {
           if (error instanceof HttpErrorResponse &&
               error.status === HttpStatusCode.Unauthorized) {
 
-              if (error.error?.reason === RefreshErrorReasonEnum.Revoked) {
+              const reason = error.error?.reason;
+              if (reason === RefreshErrorReasonEnum.Revoked) {
                   const userId = this.settings.options().lastUserId;
                   if (userId) {
                       this.appDb.initialize(userId);
                       console.warn('Session was revoked. Wiping local E2E identity keys.');
                       await this.identityService.revokeIdentity();
                   }
+              } else {
+                  // Usually a refresh-rotation race
+                  console.warn('Session refresh rejected; signing out.', reason);
               }
 
               this.settings.setOptions({ sessionCorrelationId: undefined });
+          } else {
+              console.warn('Session refresh failed (network/server); keeping session.', error);
           }
           this.tokenService.clear();
           this._user.set(undefined);
