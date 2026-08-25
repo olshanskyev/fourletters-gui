@@ -19,8 +19,15 @@
               } @else {
                 <div class="avatar -small default-avatar"></div>
               }
-              <span>
-                {{ conversation.value()?.title ?? 'Chat' }}
+              <span class="d-flex flex-col align-items-start">
+                <span class="chat-title">
+                  {{ conversation.value()?.title ?? 'Chat' }}
+                </span>
+                @if (peerId() && (peerTyping() || peerOnline())) {
+                  <span class="chat-subtitle">
+                    {{ (peerTyping() ? 'typing' : 'online') | translate }}
+                  </span>
+                }
               </span>
             </span>
           </button>
@@ -182,6 +189,7 @@
           cdkAutosizeMaxRows="5"
           placeholder="Message"
           [(ngModel)]="messageText"
+          (input)="onLocalTyping()"
           (keydown.enter)="$event.preventDefault(); sendMessage()"
         ></textarea>
 

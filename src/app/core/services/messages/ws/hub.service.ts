@@ -3,9 +3,9 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
-import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData } from '@dto/models';
+import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData, PresenceEvent, PresenceEventTypeEnum, TypingEvent, TypingEventTypeEnum, PongEventTypeEnum, PingCommandTypeEnum, PresenceSubscribeCommandTypeEnum, PresenceUnsubscribeCommandTypeEnum, TypingCommandTypeEnum } from '@dto/models';
 
-export type HubEvent = MessageEvent | ReceiptEvent;
+export type HubEvent = MessageEvent | ReceiptEvent | PresenceEvent | TypingEvent;
 
 /** Coarse hub connection state for the UI (e.g. a progress/status indicator). */
 export type HubConnectionState = 'connecting' | 'connected' | 'disconnected';
@@ -43,8 +43,13 @@ export class HubService implements OnDestroy {
   private readonly messageDeliveredSubject = new Subject<ReceiptData>();
   private readonly messageReadSubject = new Subject<ReceiptData>();
   private readonly messageUndecryptableSubject = new Subject<ReceiptData>();
+  private readonly presenceSubject = new Subject<PresenceEvent>();
+  private readonly typingSubject = new Subject<TypingEvent>();
   /** Emits on every (re)connection, so listeners can re-sync missed inbox after a wake. */
   private readonly connectedSubject = new Subject<void>();
+
+  /** Contacts currently watched, re-sent on every (re)connect so subscriptions survive a wake. */
+  private readonly watchedUserIds = new Set<string>();
 
   // Bound once so the same reference can be removed on destroy.
   private readonly wakeHandler = () => this.onWake();
@@ -100,6 +105,7 @@ export class HubService implements OnDestroy {
           next: () => {
             this.connectionState.set('connected');
             this.connectedSubject.next();
+            this.resubscribePresence();
           }
         }
       });
@@ -123,8 +129,18 @@ export class HubService implements OnDestroy {
 
   private dispatch(message: HubEvent): void {
     // Application-level pong: answer to our resume-time liveness probe; proves the socket is alive.
-    if ((message as { type?: string }).type === 'pong') {
+    if ((message as { type?: string }).type === PongEventTypeEnum.Pong) {
       this.clearPingTimer();
+      return;
+    }
+    // Presence/typing frames are discriminated by 'type' (not the 'event' business envelope).
+    const type = (message as { type?: string }).type;
+    if (type === PresenceEventTypeEnum.Presence) {
+      this.presenceSubject.next(message as PresenceEvent);
+      return;
+    }
+    if (type === TypingEventTypeEnum.Typing) {
+      this.typingSubject.next(message as TypingEvent);
       return;
     }
     if (!('event' in message)) {
@@ -194,7 +210,7 @@ export class HubService implements OnDestroy {
       void this.openSocket();
     }, HubService.PING_TIMEOUT_MS);
     try {
-      this.socket$.next({ type: 'ping' } as unknown as HubEvent);
+      this.socket$.next({ type: PingCommandTypeEnum.Ping } as unknown as HubEvent);
     } catch {
       // Sending on an already-broken socket - reopen immediately.
       this.clearPingTimer();
@@ -261,6 +277,51 @@ export class HubService implements OnDestroy {
   /** Emits whenever the socket (re)connects, e.g. after waking from background. */
   public get connected(): Observable<void> {
     return this.connectedSubject.asObservable();
+  }
+
+  /** Online/offline updates for contacts subscribed via {@link subscribePresence}. */
+  public get presence(): Observable<PresenceEvent> {
+    return this.presenceSubject.asObservable();
+  }
+
+  /** "Is typing" updates for contacts subscribed via {@link subscribePresence}. */
+  public get typing(): Observable<TypingEvent> {
+    return this.typingSubject.asObservable();
+  }
+
+  /** Start receiving a contact's online/typing state (call when opening a chat). */
+  public subscribePresence(userId: string): void {
+    this.watchedUserIds.add(userId);
+    this.sendFrame({ type: PresenceSubscribeCommandTypeEnum.PresenceSubscribe, userId });
+  }
+
+  /** Stop receiving a contact's state (call when closing a chat). */
+  public unsubscribePresence(userId: string): void {
+    this.watchedUserIds.delete(userId);
+    this.sendFrame({ type: PresenceUnsubscribeCommandTypeEnum.PresenceUnsubscribe, userId });
+  }
+
+  /** Announce that the local user is typing in their active chat. */
+  public sendTyping(): void {
+    this.sendFrame({ type: TypingCommandTypeEnum.Typing });
+  }
+
+  /** Re-send every active presence subscription after a (re)connect. */
+  private resubscribePresence(): void {
+    this.watchedUserIds.forEach((userId) =>
+      this.sendFrame({ type: PresenceSubscribeCommandTypeEnum.PresenceSubscribe, userId }));
+  }
+
+  /** Best-effort send of a control frame; silently dropped when the socket is not open. */
+  private sendFrame(frame: Record<string, unknown>): void {
+    if (!this.socket$ || this.connectionState() !== 'connected') {
+      return;
+    }
+    try {
+      this.socket$.next(frame as unknown as HubEvent);
+    } catch {
+      // Socket broke between the guard and the send; the reconnect path will re-subscribe.
+    }
   }
 
 

@@ -23,6 +23,7 @@ import { ConnectionStatus } from '../widgets/connection-status';
 import { MessagesService } from '@core/services/messages/messages.service';
 import { ConversationsService } from '@core/services/conversations/conversations.service';
 import { UsersService } from '@core/services/users/users.service';
+import { HubService } from '@core/services/messages/ws/hub.service';
 import { MatMenuModule } from '@angular/material/menu';
 import { compressImageToDataUrl } from '@core/utils/image-compression';
 
@@ -68,6 +69,7 @@ export class ChatComponent {
   messagesService = inject(MessagesService);
   private conversationsService = inject(ConversationsService);
   private usersService = inject(UsersService);
+  private hubService = inject(HubService);
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
   settingsService = inject(SettingsService);
@@ -92,6 +94,16 @@ export class ChatComponent {
   });
 
   isGroupConversation = computed(() => this.conversation.value()?.kind === 'group');
+
+  // Presence applies to 1:1 chats only; the peer is the sole participant of a direct conversation.
+  peerId = computed(() => {
+    const view = this.conversation.value();
+    return view?.kind === 'direct' ? view.participants[0] : undefined;
+  });
+  readonly peerOnline = signal(false);
+  readonly peerTyping = signal(false);
+  private typingClearTimer?: ReturnType<typeof setTimeout>;
+  private lastTypingSentAt = 0;
 
   // Messages grouped into day sections so each date header stays pinned only within its own day.
   timeline = computed<DaySection[]>(() => {
@@ -171,6 +183,35 @@ export class ChatComponent {
         this.messagesService.reconcileUnreadCount(id);
       }
     });
+
+    // Live presence/typing for the current 1:1 peer.
+    this.hubService.presence.pipe(takeUntilDestroyed()).subscribe((e) => {
+      if (e.userId === this.peerId()) {
+        this.peerOnline.set(e.status === 'online');
+        if (e.status === 'offline') {
+          this.peerTyping.set(false);
+        }
+      }
+    });
+    this.hubService.typing.pipe(takeUntilDestroyed()).subscribe((e) => {
+      if (e.userId === this.peerId()) {
+        this.peerTyping.set(true);
+        clearTimeout(this.typingClearTimer);
+        this.typingClearTimer = setTimeout(() => this.peerTyping.set(false), 3000);
+      }
+    });
+
+    // (Un)subscribe presence as the open conversation's peer changes (and on destroy).
+    effect((onCleanup) => {
+      const id = this.peerId();
+      this.peerOnline.set(false);
+      this.peerTyping.set(false);
+      if (!id) {
+        return;
+      }
+      this.hubService.subscribePresence(id);
+      onCleanup(() => this.hubService.unsubscribePresence(id));
+    });
   }
 
   messageText = signal<string>('');
@@ -191,6 +232,15 @@ export class ChatComponent {
     this.messageText.set('');
     await this.messagesService.sendMessage(convoId, text);
 
+  }
+
+  /** Throttled 'typing' signal to the hub while the user edits the message box. */
+  onLocalTyping(): void {
+    const now = Date.now();
+    if (now - this.lastTypingSentAt > 2000) {
+      this.lastTypingSentAt = now;
+      this.hubService.sendTyping();
+    }
   }
 
   async onPhotoSelected(event: Event): Promise<void> {
