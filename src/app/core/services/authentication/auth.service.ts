@@ -181,23 +181,19 @@ export class AuthService {
   }
 
   logout() {
-    // Remove the push subscription while the auth token is still valid.
+    // Push disable and the logout POST must be sent while the access token is still set (the
+    // interceptor attaches it at subscribe); fire both, then clear locally without waiting.
     this.pushService.disable().catch(() => undefined);
+    this.httpClient.post('/auth/logout', {}, { withCredentials: true })
+      .pipe(catchError(() => of(null)))
+      .subscribe();
 
-    const source = this.httpClient.post<any>('/auth/logout',
-      {},
-      {withCredentials: true}
-    );
+    // Clear immediately: logs out instantly and neutralizes the refresh cookie even if it never lands.
+    this.tokenService.clear();
+    this._user.set(undefined);
+    this.settings.setOptions({ sessionCorrelationId: undefined });
 
-    return source.pipe(
-      catchError(() => of(null)),
-      tap(() => {
-        this.tokenService.clear();
-        this._user.set(undefined);
-        this.settings.setOptions({ sessionCorrelationId: undefined });
-      }),
-      map(() => !this.tokenService.isTokenValid())
-    );
+    return of(true);
   }
 
   fetchUser() {
