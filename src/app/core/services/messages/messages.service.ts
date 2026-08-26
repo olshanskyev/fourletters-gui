@@ -377,7 +377,8 @@ export class MessagesService {
     try {
       await lastValueFrom(this.messagesApi.sendReceiptsBatch(receipts));
     } catch (err) {
-      console.error('Failed to send receipts:', err);
+      const summary = receipts.map(r => `${r.type}:${r.messageId}`).join(',');
+      console.error('Failed to send receipts:', summary, err);
     }
   }
 
@@ -480,23 +481,12 @@ export class MessagesService {
       await this.reconcileUnreadCount(conversationId);
     }
 
-    // Network: one batch of individually-signed read receipts.
-    const receipts: DeliveryReceipt[] = [];
-    for (const m of unread) {
-      try {
-        receipts.push(await this.signedReceipt(m.id, m.senderId, ReceiptType.Read));
-      } catch (e) {
-        console.warn('Could not sign read receipt', m.id, e);
-      }
-    }
-    if (receipts.length === 0) {
-      return;
-    }
-    try {
-      await lastValueFrom(this.messagesApi.sendReceiptsBatch(receipts));
-    } catch (err) {
-      console.error('Failed to send read receipts:', err);
-    }
+    // Network: one batch of individually-signed read receipts (shared signing/send path).
+    await this.flushReceipts(unread.map(m => ({
+      messageId: m.id,
+      senderId: m.senderId,
+      type: ReceiptType.Read
+    })));
   }
 
   /**

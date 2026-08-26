@@ -46,6 +46,7 @@ export class TelemetryService {
   private readonly sessionId = crypto.randomUUID();
   private started = false;
   private flushing = false;
+  private unloadFlushed = false;
   private inCapture = false;
 
   /** Wire global capture + periodic flush. Idempotent; safe to call before login. */
@@ -60,6 +61,8 @@ export class TelemetryService {
     window.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         this.flushOnUnload();
+      } else {
+        this.unloadFlushed = false;
       }
     });
     window.addEventListener('pagehide', () => this.flushOnUnload());
@@ -160,9 +163,11 @@ export class TelemetryService {
    * bypasses the interceptors, so the absolute URL and bearer token are attached manually.
    */
   private flushOnUnload(): void {
-    if (!this.auth.tokenReader.isTokenValid()) {
+    if (this.unloadFlushed || this.flushing
+        || !this.auth.tokenReader.isTokenValid()) {
       return;
     }
+    this.unloadFlushed = true;
     void this.db.records
       .orderBy('id')
       .limit(TelemetryService.BATCH_SIZE)
