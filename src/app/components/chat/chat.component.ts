@@ -154,6 +154,13 @@ export class ChatComponent {
   // the user actually brings the app to the foreground, so they are held here and flushed on return.
   private pendingReads = new Map<string, LocalMessage>();
 
+  // A read receipt is a fire-once backend call, so it must only leave a document that has settled -
+  // not one iOS is about to replace on resume (which would abort the request). The document counts
+  // as stable only after staying visible for READ_STABILITY_MS; a doomed document never gets there.
+  private static readonly READ_STABILITY_MS = 2000;
+  private stablyVisible = false;
+  private stabilityTimer?: ReturnType<typeof setTimeout>;
+
   constructor() {
     this.readQueue.pipe(
       bufferTime(400),
@@ -164,15 +171,21 @@ export class ChatComponent {
       this.messagesService.markManyAsRead(unique);
     });
 
-    // When the app returns to the foreground, release any read receipts deferred while hidden.
+    // Release deferred read receipts only once the app is stably foregrounded (see onMessageVisible).
     if (typeof document !== 'undefined') {
       fromEvent(document, 'visibilitychange').pipe(
         takeUntilDestroyed(),
       ).subscribe(() => {
         if (document.visibilityState === 'visible') {
-          this.flushPendingReads();
+          this.armReadStability();
+        } else {
+          this.cancelReadStability();
         }
       });
+      // The component can mount already visible (a normal open), so start the settle timer now.
+      if (document.visibilityState === 'visible') {
+        this.armReadStability();
+      }
     }
 
     // Opening a conversation reconciles its unread counter with the actual messages, healing any
@@ -262,14 +275,32 @@ export class ChatComponent {
     if (msg.isMine || msg.status === 'read') {
       return;
     }
-    // Never send a read receipt while the app is backgrounded (e.g. the chat was left open, or a
-    // notification-driven navigation briefly mounted it). Defer until the user actually returns.
-    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+    // Only acknowledge a read once the document has settled (visible for READ_STABILITY_MS). A
+    // document backgrounded, or one iOS is about to replace on resume, never settles - so it never
+    // fires a doomed receipt. Reads seen before then are held and flushed once stable.
+    if (!this.stablyVisible) {
       this.pendingReads.set(msg.id, msg);
       return;
     }
     // Queue for a batched read receipt (see readQueue).
     this.readQueue.next(msg);
+  }
+
+  /** Mark the document stable after it stays visible for READ_STABILITY_MS, then flush held reads. */
+  private armReadStability() {
+    clearTimeout(this.stabilityTimer);
+    this.stablyVisible = false;
+    this.stabilityTimer = setTimeout(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        this.stablyVisible = true;
+        this.flushPendingReads();
+      }
+    }, ChatComponent.READ_STABILITY_MS);
+  }
+
+  private cancelReadStability() {
+    clearTimeout(this.stabilityTimer);
+    this.stablyVisible = false;
   }
 
   private flushPendingReads() {
