@@ -67,20 +67,11 @@ export class PushService {
   }
 
   /** Route a notification tap to its conversation via the shared /m/notify deep-link handler. */
-  private async routeToConversation(data: PushNotificationData | undefined)
-    : Promise<void> {
-    const kind = data?.groupId ? 'group'
-      : data?.senderId ? 'sender' : undefined;
+  private routeToConversation(data: PushNotificationData | undefined): void {
+    const kind = data?.groupId ? 'group' : data?.senderId ? 'sender' : undefined;
     const refId = data?.groupId ?? data?.senderId;
-    if (!kind || !refId) {
-      console.warn('Notification click missing data', data);
-      return;
-    }
-    const navigated = await this.router.navigateByUrl(
-      `/m/notify/${kind}/${refId}`
-    );
-    if (!navigated) {
-      console.warn('Notification navigation to notify route cancelled');
+    if (kind && refId) {
+      this.router.navigateByUrl(`/m/notify/${kind}/${refId}`);
     }
   }
 
