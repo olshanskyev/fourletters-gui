@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http'; // DEBUG: remove after receipt-abort investigation
 import { MessagesRepository } from './messages.repository';
 import {
   LocalMessage,
@@ -51,6 +52,21 @@ export class MessagesService {
   private undecryptableSubscription?: Subscription;
   private keyChangedSubscription?: Subscription;
   private connectedSubscription?: Subscription;
+
+  // DEBUG: last time the page was hidden/suspended, used to attribute status-0 receipt aborts to a
+  // page teardown (small delta) vs a network glitch (large/none). Remove after the investigation.
+  private lastHiddenAt = 0;
+
+  // DEBUG: remove this whole constructor after the receipt-abort investigation.
+  constructor() {
+    if (typeof document !== 'undefined') {
+      const markHidden = () => { this.lastHiddenAt = Date.now(); };
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') markHidden();
+      });
+      window.addEventListener('pagehide', markHidden);
+    }
+  }
 
   /**
    * Connect to the Hub and start handling incoming live messages. Idempotent.
@@ -378,6 +394,17 @@ export class MessagesService {
       await lastValueFrom(this.messagesApi.sendReceiptsBatch(receipts));
     } catch (err) {
       const summary = receipts.map(r => `${r.type}:${r.messageId}`).join(',');
+      // DEBUG: attribute status-0 aborts (teardown vs network) - remove this branch after the
+      // investigation, keeping the plain 'Failed to send receipts' log below.
+      const status = err instanceof HttpErrorResponse ? err.status : -1;
+      if (status === 0) {
+        console.error('Receipt send aborted (0):', JSON.stringify({
+          receipts: summary,
+          visibility: typeof document !== 'undefined' ? document.visibilityState : 'n/a',
+          msSinceHidden: this.lastHiddenAt ? Date.now() - this.lastHiddenAt : -1
+        }));
+        return;
+      }
       console.error('Failed to send receipts:', summary, err);
     }
   }
