@@ -14,6 +14,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { MatSidenav, MatSidenavContent, MatSidenavModule } from '@angular/material/sidenav';
 import { Subscription } from 'rxjs/internal/Subscription';
 import { SidePanelService } from '@core/services/shared';
+import { CallComponent } from '@components/call/call.component';
 
 const MOBILE_MEDIAQUERY = 'screen and (max-width: 1279px)';
 const MONITOR_MEDIAQUERY = 'screen and (min-width: 1280px)';
@@ -24,7 +25,7 @@ const MONITOR_MEDIAQUERY = 'screen and (min-width: 1280px)';
   styleUrls: ['./main-layout.component.scss'],
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, MatSidenavModule, NgComponentOutlet],
+  imports: [RouterOutlet, MatSidenavModule, NgComponentOutlet, CallComponent],
 })
 export class MainLayoutComponent implements OnDestroy {
   readonly sidenav = viewChild.required<MatSidenav>('sidenav');

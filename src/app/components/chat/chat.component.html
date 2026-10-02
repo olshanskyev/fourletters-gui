@@ -32,7 +32,33 @@
             </span>
           </button>
         </div>
-        <app-connection-status class="connection-status -mobile" />
+        <div class="d-flex align-items-center">
+          @if(connectionState() === 'connected') {
+            @if (peerId()) {
+              <div class="m-r-4">
+                <button
+                  matIconButton
+                  [disabled]="callActive()"
+                  (click)="startCall('audio')"
+                  [attr.aria-label]="'call_start_audio' | translate"
+                >
+                  <mat-icon>call</mat-icon>
+                </button>
+                <button
+                  matIconButton
+                  [disabled]="callActive()"
+                  (click)="startCall('video')"
+                  [attr.aria-label]="'call_start_video' | translate"
+                >
+                  <mat-icon>videocam</mat-icon>
+                </button>
+              </div>
+            }
+          } @else {
+            <app-connection-status class="connection-status -mobile m-r-12" />
+          }
+
+        </div>
     </div>
   }
 
@@ -52,7 +78,20 @@
               @for (msg of day.messages; track msg.id) {
                 @if (msg.kind === 'system') {
                   <div class="system-message">
-                    @if (isGroupConversation()) {
+                    @if (msg.systemType === 'call' && msg.call; as call) {
+                      @let log = call | callLog;
+                      <span
+                        class="d-flex align-items-center gap-4"
+                        [class.call-log-unsuccessful]="log.unsuccessful"
+                      >
+                        <mat-icon class="call-log-icon">{{ log.icon }}</mat-icon>
+                        {{ log.key | translate }}
+                        @if (log.duration) {
+                          · {{ log.duration }}
+                        }
+                        · {{ msg.createdAt | date: 'shortTime' : '' : locale() }}
+                      </span>
+                    } @else if (isGroupConversation()) {
                       <span>{{ 'system_identity_changed_group' | translate: {
                         name: messageSenderName(msg.senderId) || ('unknown_contact' | translate)
                       } }}</span>

@@ -196,6 +196,54 @@ export class PushService {
     return true;
   }
 
+  /** Tag shared with the server's incoming-call push, so either one can be replaced or closed. */
+  static callNotificationTag(userId: string): string {
+    return `fourletters-call-${userId}`;
+  }
+
+  /** Show a ringing-call notification while the app is hidden; stays until acted on, no debounce. */
+  async showIncomingCallNotification(
+    userId: string,
+    title: string,
+    body: string,
+    data: PushNotificationData,
+    icon?: string
+  ): Promise<void> {
+    if (!this.swPush.isEnabled || this.currentPermission() !== 'granted') return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, {
+        body,
+        data: {
+          ...data,
+          onActionClick: {
+            default: data.senderId
+              ? { operation: 'navigateLastFocusedOrOpen', url: `/m/notify/sender/${data.senderId}` }
+              : { operation: 'focusLastFocusedOrOpen' }
+          }
+        },
+        tag: PushService.callNotificationTag(userId),
+        requireInteraction: true,
+        icon: icon || PushService.DEFAULT_ICON,
+        badge: PushService.BADGE_ICON
+      });
+    } catch (e) {
+      console.warn('Failed to show incoming call notification', e);
+    }
+  }
+
+  /** Close any shown notification with this tag (e.g. an incoming-call one once the call is over). */
+  async closeNotifications(tag: string): Promise<void> {
+    if (!this.swPush.isEnabled) return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const notifications = await registration.getNotifications({ tag });
+      notifications.forEach(notification => notification.close());
+    } catch (e) {
+      console.warn('Failed to close notifications', e);
+    }
+  }
+
   private currentPermission(): NotificationPermission {
     return typeof Notification !== 'undefined' ? Notification.permission : 'denied';
   }

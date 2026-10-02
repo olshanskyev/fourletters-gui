@@ -5,5 +5,6 @@
   "googleClientId": "__GOOGLE_CLIENT_ID__",
   "redirectUrl": "__OAUTH_REDIRECT_URL__",
   "umamiWebsiteId": "__UMAMI_WEBSITE_ID__",
-  "vapidPublicKey": "__PUSH_VAPID_PUBLIC_KEY__"
+  "vapidPublicKey": "__PUSH_VAPID_PUBLIC_KEY__",
+  "stunUrls": "__STUN_URLS__"
 }

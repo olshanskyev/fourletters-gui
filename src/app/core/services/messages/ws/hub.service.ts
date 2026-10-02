@@ -3,9 +3,9 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
-import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData, PresenceEvent, PresenceEventTypeEnum, TypingEvent, TypingEventTypeEnum, PongEventTypeEnum, PingCommandTypeEnum, PresenceSubscribeCommandTypeEnum, PresenceUnsubscribeCommandTypeEnum, TypingCommandTypeEnum } from '@dto/models';
+import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData, PresenceEvent, PresenceEventTypeEnum, TypingEvent, TypingEventTypeEnum, PongEventTypeEnum, PingCommandTypeEnum, PresenceSubscribeCommandTypeEnum, PresenceUnsubscribeCommandTypeEnum, TypingCommandTypeEnum, CallSignalEvent, CallSignalEventTypeEnum, CallSignalCommandTypeEnum } from '@dto/models';
 
-export type HubEvent = MessageEvent | ReceiptEvent | PresenceEvent | TypingEvent;
+export type HubEvent = MessageEvent | ReceiptEvent | PresenceEvent | TypingEvent | CallSignalEvent;
 
 /** Coarse hub connection state for the UI (e.g. a progress/status indicator). */
 export type HubConnectionState = 'connecting' | 'connected' | 'disconnected';
@@ -45,6 +45,7 @@ export class HubService implements OnDestroy {
   private readonly messageUndecryptableSubject = new Subject<ReceiptData>();
   private readonly presenceSubject = new Subject<PresenceEvent>();
   private readonly typingSubject = new Subject<TypingEvent>();
+  private readonly callSignalSubject = new Subject<CallSignalEvent>();
   /** Emits on every (re)connection, so listeners can re-sync missed inbox after a wake. */
   private readonly connectedSubject = new Subject<void>();
 
@@ -141,6 +142,10 @@ export class HubService implements OnDestroy {
     }
     if (type === TypingEventTypeEnum.Typing) {
       this.typingSubject.next(message as TypingEvent);
+      return;
+    }
+    if (type === CallSignalEventTypeEnum.CallSignal) {
+      this.callSignalSubject.next(message as CallSignalEvent);
       return;
     }
     if (!('event' in message)) {
@@ -289,6 +294,11 @@ export class HubService implements OnDestroy {
     return this.typingSubject.asObservable();
   }
 
+  /** Encrypted call signals (ringing, answer, ICE, hangup, ...) from call peers. */
+  public get callSignals(): Observable<CallSignalEvent> {
+    return this.callSignalSubject.asObservable();
+  }
+
   /** Start receiving a contact's online/typing state (call when opening a chat). */
   public subscribePresence(userId: string): void {
     this.watchedUserIds.add(userId);
@@ -304,6 +314,11 @@ export class HubService implements OnDestroy {
   /** Announce that the local user is typing in their active chat. */
   public sendTyping(): void {
     this.sendFrame({ type: TypingCommandTypeEnum.Typing });
+  }
+
+  /** Relay an encrypted call signal to a call peer; dropped when the socket is not open. */
+  public sendCallSignal(recipientId: string, payload: string): void {
+    this.sendFrame({ type: CallSignalCommandTypeEnum.CallSignal, recipientId, payload });
   }
 
   /** Re-send every active presence subscription after a (re)connect. */

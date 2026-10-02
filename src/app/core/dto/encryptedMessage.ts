@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { MessageHint } from './messageHint';
 
 
 export interface EncryptedMessage { 
@@ -30,5 +31,8 @@ export interface EncryptedMessage {
      * Present only for group messages.
      */
     groupId?: string;
+    hint?: MessageHint;
 }
+
+
 

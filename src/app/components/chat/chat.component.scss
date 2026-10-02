@@ -201,6 +201,16 @@ app-chat-layout {
     background-color: var(--mat-sys-surface);
     border-radius: var(--mat-sys-corner-large);
   }
+
+  .call-log-unsuccessful .call-log-icon {
+    color: var(--mat-sys-error);
+  }
+
+  .call-log-icon {
+    width: 1rem;
+    height: 1rem;
+    font-size: 1rem;
+  }
 }
 
 .notification-container {

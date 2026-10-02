@@ -20,6 +20,7 @@ import { ReceiptType, EncryptedMessage, ReceiptData, DeliveryReceipt } from '@dt
 import { SyncStateRepository } from './sync-state.repository';
 import { SecureMessageService, UndecryptableError } from './secure-message.service';
 import { GroupUndecryptableError } from '@core/services/crypto/group';
+import { CallService } from '@core/services/calls/call.service';
 
 /** A receipt we owe the sender, queued so a whole batch can be acknowledged in one request. */
 interface PendingReceipt {
@@ -45,8 +46,10 @@ export class MessagesService {
   private outboxService = inject(OutboxService);
   private syncState = inject(SyncStateRepository);
   private secureMsg = inject(SecureMessageService);
+  private callService = inject(CallService);
 
   private incomingSubscription?: Subscription;
+  private callSignalSubscription?: Subscription;
   private deliveredSubscription?: Subscription;
   private readSubscription?: Subscription;
   private undecryptableSubscription?: Subscription;
@@ -96,6 +99,9 @@ export class MessagesService {
     this.deliveredSubscription = this.hubService.messageDelivered.pipe(
       concatMap(async (receipt) => {
         try {
+          if (this.callService.ownsOffer(receipt.messageId)) {
+            return;
+          }
           if (await this.checkReceiptSignature(receipt)) {
             await this.outboxService.processReceipt(receipt.messageId, 'delivered');
           }
@@ -108,6 +114,9 @@ export class MessagesService {
     this.readSubscription = this.hubService.messageRead.pipe(
       concatMap(async (receipt) => {
         try {
+          if (this.callService.ownsOffer(receipt.messageId)) {
+            return;
+          }
           if (await this.checkReceiptSignature(receipt)) {
             await this.outboxService.processReceipt(receipt.messageId, 'read');
           }
@@ -120,6 +129,10 @@ export class MessagesService {
     this.undecryptableSubscription = this.hubService.messageUndecryptable.pipe(
       concatMap(async (receipt) => {
         try {
+          if (this.callService.ownsOffer(receipt.messageId)) {
+            await this.callService.onOfferUndecryptable(receipt.messageId, receipt.recipientId);
+            return;
+          }
           if (await this.checkReceiptSignature(receipt)) {
             await this.outboxService.resendAfterKeyChange(receipt.messageId, receipt.recipientId);
           }
@@ -135,6 +148,20 @@ export class MessagesService {
           await this.insertIdentityChangedNotice(userId);
         } catch (err) {
           console.error('Failed to insert identity-changed notice:', err);
+        }
+      })
+    ).subscribe();
+
+    // Call signals after the offer arrive over the Hub only; they are never stored or acknowledged.
+    this.callSignalSubscription = this.hubService.callSignals.pipe(
+      concatMap(async ({ senderId, payload }) => {
+        try {
+          const content = await this.secureMsg.unpackIncomingPayload(senderId, payload);
+          if (content.kind === 'call') {
+            await this.callService.handleSignal(senderId, content.signal, content.ts);
+          }
+        } catch (err) {
+          console.warn('Dropped call signal', err);
         }
       })
     ).subscribe();
@@ -187,6 +214,12 @@ export class MessagesService {
 
       // Process receipts for messages we sent that were delivered/read while we were offline
       for (const receipt of res.receipts || []) {
+        if (this.callService.ownsOffer(receipt.messageId)) {
+          if (receipt.type === ReceiptType.Undecryptable) {
+            await this.callService.onOfferUndecryptable(receipt.messageId, receipt.recipientId);
+          }
+          continue;
+        }
         if (!(await this.checkReceiptSignature(receipt))) {
           continue;
         }
@@ -258,6 +291,12 @@ export class MessagesService {
 
     if (content.kind === 'skdm') {
       await this.secureMsg.applyDistribution(senderId, content.skdm);
+      return [{ messageId, senderId, type: ReceiptType.Delivered }];
+    }
+
+    if (content.kind === 'call') {
+      // A call offer: never stored, but acknowledged so it leaves the Server's inbox.
+      await this.callService.handleSignal(senderId, content.signal, content.ts);
       return [{ messageId, senderId, type: ReceiptType.Delivered }];
     }
 
@@ -415,6 +454,10 @@ export class MessagesService {
   stopListening(): void {
     this.incomingSubscription?.unsubscribe();
     this.incomingSubscription = undefined;
+
+    this.callSignalSubscription?.unsubscribe();
+    this.callSignalSubscription = undefined;
+    this.callService.reset();
 
     this.deliveredSubscription?.unsubscribe();
     this.deliveredSubscription = undefined;

@@ -12,5 +12,7 @@ export const environment = {
   redirectUrl: 'https://localhost',
   standalone: false,
   umamiWebsiteId: '',
-  vapidPublicKey: 'BEbw8zeoHdTCqADASQIfEXT98el6h0rphh3UzBNJxOYFfkM0ccdK6VakpN6Ox-ygETx1J0nKuOcrdRZihnBK9lk'
+  vapidPublicKey: 'BEbw8zeoHdTCqADASQIfEXT98el6h0rphh3UzBNJxOYFfkM0ccdK6VakpN6Ox-ygETx1J0nKuOcrdRZihnBK9lk',
+  // Comma-separated ICE server URLs for calls; empty = host candidates only (same machine/LAN).
+  stunUrls: ''
 };
