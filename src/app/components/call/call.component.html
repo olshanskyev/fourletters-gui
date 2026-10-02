@@ -23,7 +23,7 @@
       </div>
     }
 
-    <div class="call-header d-flex flex-col align-items-center p-24">
+    <div class="call-header d-flex flex-col align-items-center p-x-24">
       <span class="call-title">{{ peer.value()?.title }}</span>
       <span class="call-status">
         @switch (call.phase) {
@@ -48,7 +48,7 @@
       ></video>
     }
 
-    <div class="call-controls d-flex justify-content-center align-items-center gap-24 p-24">
+    <div class="call-controls d-flex justify-content-center align-items-center gap-24 p-x-24">
       @if (call.phase === 'incoming') {
         <button matFab class="hangup" (click)="decline()" [attr.aria-label]="'call_decline' | translate">
           <mat-icon>call_end</mat-icon>

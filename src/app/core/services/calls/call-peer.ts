@@ -1,4 +1,4 @@
-/** Callbacks of a {@link CallPeer}; none fire after it is detached. */
+/** Callbacks of a {@link CallPeer}; none fire after it is closed. */
 export interface CallPeerEvents {
   /** Local ICE candidates, batched, to be sent to the peer. */
   candidates(candidates: RTCIceCandidateInit[]): void;
@@ -7,13 +7,22 @@ export interface CallPeerEvents {
   failed(): void;
 }
 
-/** ICE state and candidate types (never addresses): 'srflx' missing = STUN unreachable. */
+/** ICE state and candidate type counts (never addresses): no 'srflx' = STUN unreachable. */
 export interface IceDiagnostics {
   stunConfigured: boolean;
   iceConnectionState: RTCIceConnectionState;
   iceGatheringState: RTCIceGatheringState;
-  localCandidateTypes: string[];
-  remoteCandidateTypes: string[];
+  /** Gathered on this device. */
+  localCandidates: Record<string, number>;
+  /** Received from the peer over signaling. */
+  remoteCandidates: Record<string, number>;
+}
+
+function countType(counts: Record<string, number>, candidate?: string): void {
+  const type = /\btyp (\w+)/.exec(candidate ?? '')?.[1];
+  if (type) {
+    counts[type] = (counts[type] ?? 0) + 1;
+  }
 }
 
 /**
@@ -29,6 +38,8 @@ export class CallPeer {
   private localCandidates: RTCIceCandidateInit[] = [];
   private remoteCandidates: RTCIceCandidateInit[] = [];
   private flushTimer?: ReturnType<typeof setTimeout>;
+  private readonly localTypes: Record<string, number> = {};
+  private readonly remoteTypes: Record<string, number> = {};
 
   constructor(
     private readonly iceServers: RTCIceServer[],
@@ -40,7 +51,9 @@ export class CallPeer {
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
     pc.onicecandidate = event => {
       if (event.candidate) {
-        this.localCandidates.push(event.candidate.toJSON());
+        const candidate = event.candidate.toJSON();
+        countType(this.localTypes, candidate.candidate);
+        this.localCandidates.push(candidate);
         this.scheduleFlush();
       }
     };
@@ -87,46 +100,25 @@ export class CallPeer {
   }
 
   addRemoteCandidates(candidates: RTCIceCandidateInit[]): void {
-    if (!this.pc.remoteDescription) {
-      this.remoteCandidates.push(...candidates);
-      return;
-    }
-    for (const candidate of candidates) {
-      this.pc.addIceCandidate(candidate)
-        .catch(err => console.warn('Ignoring unusable ICE candidate', err));
-    }
+    candidates.forEach(c => countType(this.remoteTypes, c.candidate));
+    this.applyOrQueue(candidates);
   }
 
-  async diagnostics(): Promise<IceDiagnostics> {
-    const local = new Set<string>();
-    const remote = new Set<string>();
-    try {
-      (await this.pc.getStats()).forEach(report => {
-        if (report.type === 'local-candidate') local.add(report.candidateType);
-        if (report.type === 'remote-candidate') remote.add(report.candidateType);
-      });
-    } catch {
-      // Stats are best-effort diagnostics.
-    }
+  diagnostics(): IceDiagnostics {
     return {
       stunConfigured: this.iceServers.length > 0,
       iceConnectionState: this.pc.iceConnectionState,
       iceGatheringState: this.pc.iceGatheringState,
-      localCandidateTypes: [...local],
-      remoteCandidateTypes: [...remote]
+      localCandidates: { ...this.localTypes },
+      remoteCandidates: { ...this.remoteTypes }
     };
   }
 
-  /** Stop all events; the connection stays open (e.g. to read {@link diagnostics}). */
-  detach(): void {
+  close(): void {
     this.pc.onicecandidate = null;
     this.pc.ontrack = null;
     this.pc.onconnectionstatechange = null;
     clearTimeout(this.flushTimer);
-  }
-
-  close(): void {
-    this.detach();
     this.pc.close();
   }
 
@@ -152,6 +144,17 @@ export class CallPeer {
   private applyRemoteCandidates(): void {
     const pending = this.remoteCandidates;
     this.remoteCandidates = [];
-    this.addRemoteCandidates(pending);
+    this.applyOrQueue(pending);
+  }
+
+  private applyOrQueue(candidates: RTCIceCandidateInit[]): void {
+    if (!this.pc.remoteDescription) {
+      this.remoteCandidates.push(...candidates);
+      return;
+    }
+    for (const candidate of candidates) {
+      this.pc.addIceCandidate(candidate)
+        .catch(err => console.warn('Ignoring unusable ICE candidate', err));
+    }
   }
 }

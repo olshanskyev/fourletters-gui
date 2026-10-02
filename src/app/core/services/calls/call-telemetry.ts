@@ -3,7 +3,8 @@ import { ActiveCall } from './models/call.model';
 
 /** Why a call failed, e.g. 'ice-failed' hints at NAT / missing TURN. */
 export type CallFailureReason =
-  'setup' | 'undecryptable' | 'answer-rejected' | 'ice-failed' | 'connect-timeout';
+  'setup' | 'undecryptable' | 'answer-rejected' | 'ice-failed' | 'connect-timeout'
+  | 'peer-hangup';
 
 /** Name and message of an error, safe to log (no stack, no payloads). */
 export function describeError(err: unknown): { name?: string; message?: string } {
