@@ -220,7 +220,7 @@ export class CallService {
     }
     if (call.phase === 'incoming') {
       await this.declineCall();
-    } else if (call.phase === 'outgoing') {
+    } else if (call.phase === 'outgoing' || call.phase === 'connecting') {
       await this.finish('cancelled', { notify: 'hangup' });
     } else {
       await this.finish('ended', { notify: 'hangup' });
@@ -258,7 +258,12 @@ export class CallService {
         break;
       }
       case 'hangup':
-        await this.finish(call.phase === 'incoming' || call.phase === 'outgoing' ? 'missed' : 'ended');
+        if (call.phase === 'connecting') {
+          // Usually the peer's connection failed first.
+          await this.finish('failed', { reason: 'peer-hangup' });
+        } else {
+          await this.finish(call.phase === 'connected' ? 'ended' : 'missed');
+        }
         break;
       case 'decline':
         if (call.direction === 'outgoing') {
@@ -327,6 +332,8 @@ export class CallService {
       await this.finish('failed', { notify: 'hangup', error: err, reason: 'answer-rejected' });
       return;
     }
+    // In case 'ringing' was lost: the answer also proves the callee listens.
+    peer.startSendingCandidates();
     this.armConnectTimeout();
   }
 
@@ -361,17 +368,13 @@ export class CallService {
     const durationSec = outcome === 'ended' && call.connectedAt
       ? Math.round((Date.now() - call.connectedAt) / 1000)
       : undefined;
-    // Closed only after the failure report has read its ICE stats.
-    const peer = this.peer;
-    this.peer = undefined;
-    peer?.detach();
+    const ice = this.peer?.diagnostics();
     this.cleanup();
     void this.closeCallNotification();
     this.endedSubject.next({ call, outcome, error });
     if (outcome === 'failed') {
-      logCallFailure(call, reason ?? 'setup', error, await peer?.diagnostics());
+      logCallFailure(call, reason ?? 'setup', error, ice);
     }
-    peer?.close();
     await this.history.log(call.conversationId, call.peerId, call.callId, call.startedAt,
       { media: call.media, direction: call.direction, outcome, durationSec });
   }

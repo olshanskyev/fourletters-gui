@@ -80,9 +80,11 @@ export class CallComponent {
       this.showError(error);
       return;
     }
-    const key = outcome === 'failed'
-      ? 'call_failed'
-      : call.direction === 'outgoing' ? CallComponent.CALLER_NOTICES[outcome] : undefined;
+    if (outcome === 'failed') {
+      this.toast.error(this.translate.instant('call_failed'));
+      return;
+    }
+    const key = call.direction === 'outgoing' ? CallComponent.CALLER_NOTICES[outcome] : undefined;
     if (key) {
       this.toast.show(this.translate.instant(key));
     }

@@ -11,3 +11,9 @@
   --hot-toast-close-btn-padding: 4px;
   --hot-toast-close-btn-margin-top: 4px;
 }
+
+// Keep toasts clear of the notch / home indicator.
+.hot-toast-container-overlay {
+  inset: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left) !important;
+}
