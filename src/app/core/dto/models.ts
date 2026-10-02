@@ -1,6 +1,8 @@
 export * from './acceptedResponse';
 export * from './authRequest';
 export * from './authResponse';
+export * from './callSignalCommand';
+export * from './callSignalEvent';
 export * from './createGroupRequest';
 export * from './deliveryReceipt';
 export * from './encryptedMessage';
@@ -15,6 +17,7 @@ export * from './keysUploadRequest';
 export * from './messageBatchRequest';
 export * from './messageBatchResponse';
 export * from './messageEvent';
+export * from './messageHint';
 export * from './messageReceipt';
 export * from './oneTimePreKey';
 export * from './pingCommand';

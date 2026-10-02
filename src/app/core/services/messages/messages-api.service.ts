@@ -9,6 +9,7 @@ import {
   DeliveryReceipt,
   MessageBatchRequest,
   MessageBatchResponse,
+  MessageHint,
   ReceiptBatchRequest,
   ReceiptType
 } from '@dto/models';
@@ -26,13 +27,15 @@ export class MessagesApiService {
     recipientId: string,
     payload: string,
     messageId: string = crypto.randomUUID(),
-    groupId?: string
+    groupId?: string,
+    hint?: MessageHint
   ): Observable<AcceptedResponse> {
     const message: EncryptedMessage = {
       messageId,
       recipientId,
       payload,
-      ...(groupId ? { groupId } : {})
+      ...(groupId ? { groupId } : {}),
+      ...(hint ? { hint } : {})
     };
     return this.httpClient.post<AcceptedResponse>('/messages', message);
   }

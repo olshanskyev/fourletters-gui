@@ -11,9 +11,9 @@ import { HubService } from '@core/services/messages/ws/hub.service';
   selector: 'app-connection-status',
   template: `
     @if (connectionState() === 'connecting') {
-      <mat-spinner [diameter]="20" [strokeWidth]="2" class="m-r-12"/>
+      <mat-spinner [diameter]="20" [strokeWidth]="2"/>
     } @else if (connectionState() === 'disconnected') {
-      <mat-icon class="offline-icon m-r-12">cloud_off</mat-icon>
+      <mat-icon class="offline-icon">cloud_off</mat-icon>
     }
   `,
   styles: `

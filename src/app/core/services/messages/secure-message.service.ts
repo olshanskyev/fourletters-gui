@@ -8,6 +8,7 @@ import { ContactsService } from '@core/services/contacts';
 import { IdentityService } from '@core/services/identity';
 import { AuthService } from '@core/services/authentication/auth.service';
 import { GroupsService } from '@core/services/groups/groups.service';
+import { CallSignal } from '@core/services/calls/models/call.model';
 
 /**
  * Thrown when an incoming 1:1 payload cannot be decrypted — no session yet, a corrupt/duplicate
@@ -45,14 +46,16 @@ export interface DecodedContent { content: MessageContent; ts?: number }
 export type PairwiseContent =
   | ({ kind: 'chat' } & DecodedContent)
   | { kind: 'skdm'; skdm: SenderKeyDistribution }
-  | ({ kind: 'group-redelivery'; groupId: string } & DecodedContent);
+  | ({ kind: 'group-redelivery'; groupId: string } & DecodedContent)
+  | { kind: 'call'; signal: CallSignal; ts?: number };
 
 
 /** Control envelope wrapping every pairwise plaintext so SKDMs and chats share one ratchet. */
 type PairwiseEnvelope =
   | { t: 'chat'; b: ChatBody }
   | { t: 'skdm'; d: SenderKeyDistribution }
-  | { t: 'grp'; g: string; b: ChatBody };
+  | { t: 'grp'; g: string; b: ChatBody }
+  | { t: 'call'; c: CallSignal; ts: number };
 
 @Injectable({
   providedIn: 'root'
@@ -111,6 +114,17 @@ export class SecureMessageService {
     return { payload: await this.encryptPairwise(recipientId, envelope, true) };
   }
 
+  /** Encrypt a call signal over the pairwise ratchet; `ts` lets the callee drop a stale offer. */
+  async buildCallPayload(
+    recipientId: string,
+    signal: CallSignal,
+    ts: number = Date.now(),
+    forceNewSession = false
+  ): Promise<{ payload: string }> {
+    const envelope: PairwiseEnvelope = { t: 'call', c: signal, ts };
+    return { payload: await this.encryptPairwise(recipientId, envelope, forceNewSession) };
+  }
+
   /** Encrypt a group chat message once with this device's Sender Key for the group epoch. */
   async buildGroupPayload(
     groupId: string,
@@ -153,6 +167,13 @@ export class SecureMessageService {
       const { content, ts } = this.contentFromBody(envelope.b);
       return { kind: 'group-redelivery', groupId: envelope.g, content, ts };
     }
+    if (envelope.t === 'call') {
+      if (!this.isCallSignal(envelope.c)) {
+        throw new Error('Malformed call signal');
+      }
+      const ts = typeof envelope.ts === 'number' ? envelope.ts : undefined;
+      return { kind: 'call', signal: envelope.c, ts };
+    }
     const { content, ts } = this.contentFromBody(envelope.b);
     return { kind: 'chat', content, ts };
   }
@@ -188,6 +209,12 @@ export class SecureMessageService {
 
   private isChatBody(body: unknown): body is ChatBody {
     return typeof body === 'object' && body !== null && typeof (body as ChatBody).x === 'string';
+  }
+
+  private isCallSignal(signal: unknown): signal is CallSignal {
+    const s = signal as CallSignal;
+    return typeof s === 'object' && s !== null
+      && typeof s.callId === 'string' && typeof s.type === 'string';
   }
 
   async applyDistribution(senderId: string, skdm: SenderKeyDistribution): Promise<void> {

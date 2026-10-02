@@ -26,6 +26,12 @@ import { UsersService } from '@core/services/users/users.service';
 import { HubService } from '@core/services/messages/ws/hub.service';
 import { MatMenuModule } from '@angular/material/menu';
 import { compressImageToDataUrl } from '@core/utils/image-compression';
+import { CallService } from '@core/services/calls/call.service';
+import { CallMedia } from '@core/services/calls/models/call.model';
+import { HotToastService } from '@ngxpert/hot-toast';
+import { TranslateService } from '@ngx-translate/core';
+import { callErrorKey } from '@components/call/call-utils';
+import { CallLogPipe } from './call-log.pipe';
 
 interface DaySection {
   id: string;
@@ -59,6 +65,7 @@ const PHOTO_OPTIONS = {
     ObserveVisibilityDirective,
     DecryptMessagePipe,
     LinkifyPipe,
+    CallLogPipe,
     TranslateModule,
     MatMenuModule,
     ConnectionStatus
@@ -70,6 +77,10 @@ export class ChatComponent {
   private conversationsService = inject(ConversationsService);
   private usersService = inject(UsersService);
   private hubService = inject(HubService);
+  private callService = inject(CallService);
+  private toast = inject(HotToastService);
+  private translate = inject(TranslateService);
+  readonly callActive = computed(() => !!this.callService.activeCall());
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
   settingsService = inject(SettingsService);
@@ -160,6 +171,7 @@ export class ChatComponent {
   private static readonly READ_STABILITY_MS = 2000;
   private stablyVisible = false;
   private stabilityTimer?: ReturnType<typeof setTimeout>;
+  readonly connectionState = this.hubService.connectionState;
 
   constructor() {
     this.readQueue.pipe(
@@ -235,6 +247,13 @@ export class ChatComponent {
     this.sidePanelService.open(ChatDetailsComponent, {
       conversationView: this.conversation.value(),
     });
+  }
+
+  startCall(media: CallMedia): void {
+    const convoId = this.conversationId();
+    if (!convoId) return;
+    this.callService.startCall(convoId, media)
+      .catch(err => this.toast.error(this.translate.instant(callErrorKey(err))));
   }
 
   async sendMessage() {

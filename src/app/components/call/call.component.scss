@@ -1,0 +1,86 @@
+.call-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  color: var(--mat-sys-on-surface);
+  background-color: var(--mat-sys-surface-container-highest);
+}
+
+.remote-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-color: #000;
+
+  // Kept in the DOM (not display:none) so an audio-only call still plays the peer's audio.
+  &.hidden-video {
+    opacity: 0;
+  }
+}
+
+.call-peer {
+  position: absolute;
+  inset: 0;
+}
+
+.call-avatar {
+  width: 8rem;
+  height: 8rem;
+}
+
+.call-header {
+  position: relative;
+  padding-top: calc(env(safe-area-inset-top) + 1.5rem);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
+
+.call-title {
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.call-status {
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.local-video {
+  position: absolute;
+  right: 1rem;
+  bottom: calc(env(safe-area-inset-bottom) + 7rem);
+  width: 7rem;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background-color: #000;
+  border-radius: var(--mat-sys-corner-medium);
+  box-shadow: var(--mat-sys-level2);
+  transform: scaleX(-1);
+
+  &.camera-off {
+    opacity: 0;
+  }
+}
+
+.call-controls {
+  position: relative;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 1.5rem);
+  margin-top: auto;
+}
+
+.hangup {
+  color: var(--mat-sys-on-error);
+  background-color: var(--mat-sys-error);
+}
+
+.accept {
+  color: var(--mat-sys-on-primary);
+  background-color: var(--mat-sys-primary);
+}
+
+.control {
+  color: var(--mat-sys-on-surface);
+  background-color: var(--mat-sys-surface-container);
+}

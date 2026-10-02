@@ -1,3 +1,5 @@
+import { CallDirection, CallMedia, CallOutcome } from '@core/services/calls/models/call.model';
+
 export type MessageStatus = 'pending' | 'accepted' | 'delivered' | 'read' | 'failed';
 
 
@@ -42,12 +44,30 @@ export interface GroupMessage extends BaseMessage {
   epoch?: number; // group Sender-Key epoch this copy was encrypted under
 }
 
-export type SystemMessageType = 'identity-changed';
+export type SystemMessageType = 'identity-changed' | 'call';
 
-/** A locally generated, non-encrypted timeline notice (e.g. a contact's identity key changed). */
+/** Local call-log details of a 'call' system message. */
+export interface CallLogEntry {
+  media: CallMedia;
+  direction: CallDirection;
+  outcome: CallOutcome;
+  durationSec?: number; // set when outcome is 'ended'
+}
+
+/** Conversation-list preview for a call-log entry. */
+export function callPreview(entry: CallLogEntry): string {
+  if (entry.outcome === 'missed') {
+    return entry.direction === 'incoming' ? 'Missed call' : 'No answer';
+  }
+  const kind = entry.media === 'video' ? 'video call' : 'voice call';
+  return `${entry.direction === 'incoming' ? 'Incoming' : 'Outgoing'} ${kind}`;
+}
+
+/** A locally generated, non-encrypted timeline notice (identity-key change, call log). */
 export interface SystemMessage extends BaseMessage {
   kind: 'system';
   systemType: SystemMessageType;
+  call?: CallLogEntry; // set when systemType is 'call'
   recipientId?: undefined; // guard: never routed
   groupId?: undefined;
 }

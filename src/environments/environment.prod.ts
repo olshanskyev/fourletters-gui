@@ -10,5 +10,6 @@ export const environment = {
   redirectUrl: '',
   standalone: false,
   umamiWebsiteId: '',
-  vapidPublicKey: ''
+  vapidPublicKey: '',
+  stunUrls: ''
 };

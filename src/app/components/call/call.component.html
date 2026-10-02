@@ -1,0 +1,84 @@
+@if (call(); as call) {
+  <div class="call-overlay d-flex flex-col">
+    <video
+      class="remote-video"
+      [class.hidden-video]="!calls.remoteHasVideo()"
+      [srcObject]="calls.remoteStream()"
+      autoplay
+      playsinline
+    ></video>
+
+    @if (!calls.remoteHasVideo() || call.phase !== 'connected') {
+      <div class="call-peer d-flex flex-col align-items-center justify-content-center gap-12">
+        @if (peer.value()?.avatarUrl) {
+          <img
+            [src]="peer.value()!.avatarUrl"
+            class="avatar call-avatar"
+            alt="avatar"
+            referrerpolicy="no-referrer"
+          />
+        } @else {
+          <div class="avatar call-avatar default-avatar"></div>
+        }
+      </div>
+    }
+
+    <div class="call-header d-flex flex-col align-items-center p-24">
+      <span class="call-title">{{ peer.value()?.title }}</span>
+      <span class="call-status">
+        @switch (call.phase) {
+          @case ('outgoing') { {{ 'call_calling' | translate }} }
+          @case ('incoming') {
+            {{ (call.media === 'video' ? 'call_incoming_video' : 'call_incoming_audio') | translate }}
+          }
+          @case ('connecting') { {{ 'call_connecting' | translate }} }
+          @case ('connected') { {{ duration() }} }
+        }
+      </span>
+    </div>
+
+    @if (localHasVideo()) {
+      <video
+        class="local-video"
+        [class.camera-off]="media.cameraOff()"
+        [srcObject]="media.localStream()"
+        autoplay
+        playsinline
+        muted
+      ></video>
+    }
+
+    <div class="call-controls d-flex justify-content-center align-items-center gap-24 p-24">
+      @if (call.phase === 'incoming') {
+        <button matFab class="hangup" (click)="decline()" [attr.aria-label]="'call_decline' | translate">
+          <mat-icon>call_end</mat-icon>
+        </button>
+        <button matFab class="accept" (click)="accept(false)" [attr.aria-label]="'call_accept_audio' | translate">
+          <mat-icon>call</mat-icon>
+        </button>
+        @if (call.media === 'video') {
+          <button matFab class="accept" (click)="accept(true)" [attr.aria-label]="'call_accept_video' | translate">
+            <mat-icon>videocam</mat-icon>
+          </button>
+        }
+      } @else {
+        <button matMiniFab class="control" (click)="media.toggleMute()" [attr.aria-label]="'call_mute' | translate">
+          <mat-icon>{{ media.muted() ? 'mic_off' : 'mic' }}</mat-icon>
+        </button>
+        @if (localHasVideo()) {
+          <button matMiniFab class="control" (click)="media.toggleCamera()" [attr.aria-label]="'call_camera' | translate">
+            <mat-icon>{{ media.cameraOff() ? 'videocam_off' : 'videocam' }}</mat-icon>
+          </button>
+          @if (media.canSwitchCamera()) {
+            <button matMiniFab class="control" (click)="switchCamera()" [attr.aria-label]="'call_switch_camera' | translate">
+              <mat-icon>cameraswitch</mat-icon>
+            </button>
+          }
+        }
+        <button matFab class="hangup" (click)="hangup()" [attr.aria-label]="'call_hangup' | translate">
+          <mat-icon>call_end</mat-icon>
+        </button>
+      }
+    </div>
+  </div>
+}
