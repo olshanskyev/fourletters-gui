@@ -10,10 +10,18 @@
 
 
 /**
- * Client -> Hub: \'I am typing in my active chat.\' The Hub derives the sender id from the authenticated session and relays it to that user\'s watchers.
+ * Client -> Hub: announce typing to exactly one destination: recipientId for a direct chat or groupId for a group. The Hub validates destination exclusivity and derives the sender from authentication.
  */
 export interface TypingCommand { 
     type: TypingCommandTypeEnum;
+    /**
+     * Direct recipient; routed to typing.user.<recipientId>.
+     */
+    recipientId?: string;
+    /**
+     * Group destination; routed to typing.group.<groupId>.
+     */
+    groupId?: string;
 }
 export enum TypingCommandTypeEnum {
     Typing = 'typing'

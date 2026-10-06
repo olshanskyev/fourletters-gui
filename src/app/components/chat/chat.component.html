@@ -23,11 +23,7 @@
                 <span class="chat-title">
                   {{ conversation.value()?.title ?? 'Chat' }}
                 </span>
-                @if (peerId() && (peerTyping() || peerOnline())) {
-                  <span class="chat-subtitle">
-                    {{ (peerTyping() ? 'typing' : 'online') | translate }}
-                  </span>
-                }
+                <app-chat-status [peerId]="peerId()" [groupId]="groupId()" />
               </span>
             </span>
           </button>

@@ -45,6 +45,8 @@ export * from './telemetryLogRecord';
 export * from './telemetryResource';
 export * from './typingCommand';
 export * from './typingEvent';
+export * from './typingGroupSubscribeCommand';
+export * from './typingGroupUnsubscribeCommand';
 export * from './updateGroupRequest';
 export * from './updateMembersRequest';
 export * from './userBatchResponse';

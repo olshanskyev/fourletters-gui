@@ -32,6 +32,7 @@ import { HotToastService } from '@ngxpert/hot-toast';
 import { TranslateService } from '@ngx-translate/core';
 import { callErrorKey } from '@components/call/call-utils';
 import { CallLogPipe } from './call-log.pipe';
+import { ChatStatusComponent } from './chat-status/chat-status.component';
 
 interface DaySection {
   id: string;
@@ -68,7 +69,8 @@ const PHOTO_OPTIONS = {
     CallLogPipe,
     TranslateModule,
     MatMenuModule,
-    ConnectionStatus
+    ConnectionStatus,
+    ChatStatusComponent
   ],
 })
 export class ChatComponent {
@@ -109,11 +111,13 @@ export class ChatComponent {
   // Presence applies to 1:1 chats only; the peer is the sole participant of a direct conversation.
   peerId = computed(() => {
     const view = this.conversation.value();
-    return view?.kind === 'direct' ? view.participants[0] : undefined;
+    return view && view.id === this.conversationId() && view.kind === 'direct'
+      ? view.participants[0] : undefined;
   });
-  readonly peerOnline = signal(false);
-  readonly peerTyping = signal(false);
-  private typingClearTimer?: ReturnType<typeof setTimeout>;
+  readonly groupId = computed(() => {
+    const view = this.conversation.value();
+    return view && view.id === this.conversationId() ? view.groupId : undefined;
+  });
   private lastTypingSentAt = 0;
 
   // Messages grouped into day sections so each date header stays pinned only within its own day.
@@ -136,9 +140,8 @@ export class ChatComponent {
       if (!this.isGroupConversation()) {
         return [];
       }
-      return [...new Set(this.messages().filter(
-        (msg) => !msg.isMine).map((msg) => msg.senderId)
-      )].sort();
+      const ids = this.messages().filter((msg) => !msg.isMine).map((msg) => msg.senderId);
+      return [...new Set(ids)].sort();
     },
     { equal: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]) },
   );
@@ -204,39 +207,12 @@ export class ChatComponent {
     // stale badge left behind when a message ended up read without a matching counter decrement.
     effect(() => {
       const id = this.conversationId();
+      this.lastTypingSentAt = 0;
       if (id) {
         this.messagesService.reconcileUnreadCount(id);
       }
     });
 
-    // Live presence/typing for the current 1:1 peer.
-    this.hubService.presence.pipe(takeUntilDestroyed()).subscribe((e) => {
-      if (e.userId === this.peerId()) {
-        this.peerOnline.set(e.status === 'online');
-        if (e.status === 'offline') {
-          this.peerTyping.set(false);
-        }
-      }
-    });
-    this.hubService.typing.pipe(takeUntilDestroyed()).subscribe((e) => {
-      if (e.userId === this.peerId()) {
-        this.peerTyping.set(true);
-        clearTimeout(this.typingClearTimer);
-        this.typingClearTimer = setTimeout(() => this.peerTyping.set(false), 3000);
-      }
-    });
-
-    // (Un)subscribe presence as the open conversation's peer changes (and on destroy).
-    effect((onCleanup) => {
-      const id = this.peerId();
-      this.peerOnline.set(false);
-      this.peerTyping.set(false);
-      if (!id) {
-        return;
-      }
-      this.hubService.subscribePresence(id);
-      onCleanup(() => this.hubService.unsubscribePresence(id));
-    });
   }
 
   messageText = signal<string>('');
@@ -271,7 +247,7 @@ export class ChatComponent {
     const now = Date.now();
     if (now - this.lastTypingSentAt > 2000) {
       this.lastTypingSentAt = now;
-      this.hubService.sendTyping();
+      this.hubService.sendTyping(this.peerId(), this.groupId());
     }
   }
 

@@ -10,7 +10,7 @@
 
 
 /**
- * Client -> Hub: start receiving a contact\'s online/typing state.
+ * Client -> Hub: start receiving a contact\'s online/offline state.
  */
 export interface PresenceSubscribeCommand { 
     type: PresenceSubscribeCommandTypeEnum;

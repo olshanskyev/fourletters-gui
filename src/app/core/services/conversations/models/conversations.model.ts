@@ -23,6 +23,7 @@ export interface LocalConversation {
 export interface ConversationView {
   id: string;
   kind: ConversationKind;
+  groupId?: string;
   title: string;
   avatarUrl?: string;
   participants: string[]; // [peerId] for direct; the roster for group
