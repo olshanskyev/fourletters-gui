@@ -165,6 +165,7 @@ export class ConversationsService {
     const base = {
       id: c.id,
       kind: c.kind,
+      groupId: c.groupId,
       lastMessageText: c.lastMessageText,
       lastMessageAt: c.lastMessageAt,
       unreadCount: c.unreadCount

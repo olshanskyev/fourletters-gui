@@ -3,7 +3,11 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from '../../authentication/auth.service';
-import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData, PresenceEvent, PresenceEventTypeEnum, TypingEvent, TypingEventTypeEnum, PongEventTypeEnum, PingCommandTypeEnum, PresenceSubscribeCommandTypeEnum, PresenceUnsubscribeCommandTypeEnum, TypingCommandTypeEnum, CallSignalEvent, CallSignalEventTypeEnum, CallSignalCommandTypeEnum } from '@dto/models';
+import {
+  TypingGroupSubscribeCommandTypeEnum,
+  TypingGroupUnsubscribeCommandTypeEnum,
+} from '@dto/models';
+import { EncryptedMessage, MessageEvent, MessageEventEventEnum, ReceiptEvent, ReceiptEventEventEnum, ReceiptData, PresenceEvent, PresenceEventTypeEnum, TypingEvent, TypingEventTypeEnum, PongEventTypeEnum, PingCommandTypeEnum, PresenceSubscribeCommandTypeEnum, PresenceUnsubscribeCommandTypeEnum, CallSignalEvent, CallSignalEventTypeEnum, CallSignalCommandTypeEnum } from '@dto/models';
 
 export type HubEvent = MessageEvent | ReceiptEvent | PresenceEvent | TypingEvent | CallSignalEvent;
 
@@ -51,6 +55,7 @@ export class HubService implements OnDestroy {
 
   /** Contacts currently watched, re-sent on every (re)connect so subscriptions survive a wake. */
   private readonly watchedUserIds = new Set<string>();
+  private readonly watchedGroupIds = new Set<string>();
 
   // Bound once so the same reference can be removed on destroy.
   private readonly wakeHandler = () => this.onWake();
@@ -289,7 +294,7 @@ export class HubService implements OnDestroy {
     return this.presenceSubject.asObservable();
   }
 
-  /** "Is typing" updates for contacts subscribed via {@link subscribePresence}. */
+  /** Direct typing addressed to us and typing in subscribed groups. */
   public get typing(): Observable<TypingEvent> {
     return this.typingSubject.asObservable();
   }
@@ -299,7 +304,7 @@ export class HubService implements OnDestroy {
     return this.callSignalSubject.asObservable();
   }
 
-  /** Start receiving a contact's online/typing state (call when opening a chat). */
+  /** Start receiving a contact's online/offline state (call when opening a chat). */
   public subscribePresence(userId: string): void {
     this.watchedUserIds.add(userId);
     this.sendFrame({ type: PresenceSubscribeCommandTypeEnum.PresenceSubscribe, userId });
@@ -312,8 +317,24 @@ export class HubService implements OnDestroy {
   }
 
   /** Announce that the local user is typing in their active chat. */
-  public sendTyping(): void {
-    this.sendFrame({ type: TypingCommandTypeEnum.Typing });
+  public sendTyping(recipientId?: string, groupId?: string): void {
+    if (!!recipientId === !!groupId) {
+      return;
+    }
+    this.sendFrame({
+      type: TypingEventTypeEnum.Typing,
+      ...(groupId ? { groupId } : { recipientId }),
+    });
+  }
+
+  public subscribeGroupTyping(groupId: string): void {
+    this.watchedGroupIds.add(groupId);
+    this.sendFrame({ type: TypingGroupSubscribeCommandTypeEnum.TypingGroupSubscribe, groupId });
+  }
+
+  public unsubscribeGroupTyping(groupId: string): void {
+    this.watchedGroupIds.delete(groupId);
+    this.sendFrame({ type: TypingGroupUnsubscribeCommandTypeEnum.TypingGroupUnsubscribe, groupId });
   }
 
   /** Relay an encrypted call signal to a call peer; dropped when the socket is not open. */
@@ -321,10 +342,12 @@ export class HubService implements OnDestroy {
     this.sendFrame({ type: CallSignalCommandTypeEnum.CallSignal, recipientId, payload });
   }
 
-  /** Re-send every active presence subscription after a (re)connect. */
+  /** Re-send active presence and group typing subscriptions after a (re)connect. */
   private resubscribePresence(): void {
     this.watchedUserIds.forEach((userId) =>
       this.sendFrame({ type: PresenceSubscribeCommandTypeEnum.PresenceSubscribe, userId }));
+    this.watchedGroupIds.forEach((groupId) =>
+      this.sendFrame({ type: TypingGroupSubscribeCommandTypeEnum.TypingGroupSubscribe, groupId }));
   }
 
   /** Best-effort send of a control frame; silently dropped when the socket is not open. */

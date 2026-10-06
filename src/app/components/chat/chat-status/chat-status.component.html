@@ -1,0 +1,8 @@
+@if (typingUserId() || (peerId() && online())) {
+  <span class="chat-subtitle">
+    @if (groupId() && typingUserId()) {
+      {{ typingName() || ('unknown_contact' | translate) }}
+    }
+    {{ (typingUserId() ? 'typing' : 'online') | translate }}
+  </span>
+}

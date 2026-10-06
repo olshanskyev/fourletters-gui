@@ -10,14 +10,18 @@
 
 
 /**
- * WS push: a watched contact is currently typing.
+ * WS push: an authenticated user is typing. Direct events are delivered only to the recipient; group events carry groupId and are delivered to group typing watchers. No persistence or replay.
  */
 export interface TypingEvent { 
     type: TypingEventTypeEnum;
     /**
-     * The contact who is typing.
+     * The sender who is typing, derived from the authenticated session.
      */
     userId: string;
+    /**
+     * The group being typed in. Absent for direct typing.
+     */
+    groupId?: string;
 }
 export enum TypingEventTypeEnum {
     Typing = 'typing'
