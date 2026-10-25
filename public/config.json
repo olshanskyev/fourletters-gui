@@ -6,5 +6,6 @@
   "redirectUrl": "__OAUTH_REDIRECT_URL__",
   "umamiWebsiteId": "__UMAMI_WEBSITE_ID__",
   "vapidPublicKey": "__PUSH_VAPID_PUBLIC_KEY__",
-  "stunUrls": "__STUN_URLS__"
+  "stunUrls": "__STUN_URLS__",
+  "maxMessagePayloadBytes": "__MESSAGE_MAX_PAYLOAD_BYTES__"
 }

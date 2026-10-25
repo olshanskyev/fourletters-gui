@@ -14,5 +14,7 @@ export const environment = {
   umamiWebsiteId: '',
   vapidPublicKey: 'BEbw8zeoHdTCqADASQIfEXT98el6h0rphh3UzBNJxOYFfkM0ccdK6VakpN6Ox-ygETx1J0nKuOcrdRZihnBK9lk',
   // Comma-separated ICE server URLs for calls; empty = host candidates only (same machine/LAN).
-  stunUrls: ''
+  stunUrls: '',
+  // Must match the Server's messages.max-payload-bytes.
+  maxMessagePayloadBytes: 4194304
 };

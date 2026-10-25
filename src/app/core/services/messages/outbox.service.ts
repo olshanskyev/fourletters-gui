@@ -16,6 +16,7 @@ import { AuthService } from '@core/services/authentication/auth.service';
 import { lastValueFrom } from 'rxjs';
 import { LocalConversation } from '@core/services/conversations/models/conversations.model';
 import { AcceptedResponse, EncryptedMessage } from '@dto/models';
+import { environment } from '@env/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -31,6 +32,9 @@ export class OutboxService {
 
   /** How many times a still-pending send is retried (across reconnects) before it is failed. */
   private static readonly MAX_SEND_ATTEMPTS = 5;
+
+  /** Max messages per /messages/batch request (the Server accepts up to 100). */
+  private static readonly MAX_BATCH_COUNT = 50;
 
   async sendMessage(
     conversationId: string,
@@ -214,11 +218,7 @@ export class OutboxService {
         await this.resyncGroupMessage(msg);
       }
 
-      // Direct messages go out in batches to avoid an oversized payload.
-      const chunkSize = 50;
-      for (let i = 0; i < direct.length; i += chunkSize) {
-        await this.resendDirectBatch(direct.slice(i, i + chunkSize));
-      }
+      await this.resendDirect(direct);
     } catch (err) {
       console.error('Failed to resync outbox:', err);
     }
@@ -263,20 +263,45 @@ export class OutboxService {
   }
 
   /**
-   * Re-submit a batch of direct messages, re-transmitting each one's stored ciphertext. Accepted
-   * copies move to 'accepted'; any never-accepted message is marked 'failed'.
+   * Re-submit direct messages, re-transmitting each one's stored ciphertext, in batch requests
+   * bounded by both message count and total payload size.
    */
-  private async resendDirectBatch(chunk: DirectMessage[]): Promise<void> {
+  private async resendDirect(direct: DirectMessage[]): Promise<void> {
     const messages: EncryptedMessage[] = [];
-    for (const msg of chunk) {
+    for (const msg of direct) {
       const recipientId = msg.recipientId;
       const payload = await this.cipherFor(msg, recipientId);
       messages.push({ messageId: msg.id, recipientId, payload });
     }
     // Persist any ciphertext freshly created above (e.g. a never-encrypted pending message).
-    await Promise.all(chunk.map(msg => this.repository.updateMessage(msg)
+    await Promise.all(direct.map(msg => this.repository.updateMessage(msg)
       .catch(err => console.warn('Failed to persist batched message cipher', err))));
 
+    let parts: DirectMessage[] = [];
+    let wires: EncryptedMessage[] = [];
+    let size = 0;
+    for (let i = 0; i < direct.length; i++) {
+      const payloadSize = messages[i].payload.length;
+      const full = wires.length >= OutboxService.MAX_BATCH_COUNT
+        || size + payloadSize > environment.maxMessagePayloadBytes;
+      if (wires.length > 0 && full) {
+        await this.submitDirectBatch(parts, wires);
+        parts = [];
+        wires = [];
+        size = 0;
+      }
+      parts.push(direct[i]);
+      wires.push(messages[i]);
+      size += payloadSize;
+    }
+    if (wires.length > 0) {
+      await this.submitDirectBatch(parts, wires);
+    }
+  }
+
+  /** Submit one batch request and settle each message by whether the Server accepted it. */
+  private async submitDirectBatch(chunk: DirectMessage[], messages: EncryptedMessage[])
+    : Promise<void> {
     try {
       const res = await lastValueFrom(this.messagesApi.sendMessagesBatch(messages));
       if (res.serverStartedAt) {

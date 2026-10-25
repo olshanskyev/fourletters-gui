@@ -12,7 +12,12 @@ async function loadRuntimeConfig(): Promise<void> {
     const response = await fetch('config.json', { cache: 'no-cache' });
     if (!response.ok) return;
     const config = await response.json();
-    Object.assign(environment, { ...config, vkAppId: Number(config.vkAppId) });
+    Object.assign(environment, {
+      ...config,
+      vkAppId: Number(config.vkAppId),
+      maxMessagePayloadBytes:
+        Number(config.maxMessagePayloadBytes) || environment.maxMessagePayloadBytes,
+    });
   } catch (err) {
     console.error('Failed to load runtime config', err);
   }
