@@ -1,4 +1,7 @@
-import { Component, computed, effect, inject, input, resource, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component, computed, effect, inject, input, linkedSignal, resource, signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatLayoutComponent } from '@layouts/chat-layout/chat-layout.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -13,11 +16,10 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { toSignal, toObservable, rxResource, takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { switchMap, of, Subject, bufferTime, filter, fromEvent } from 'rxjs';
+import { switchMap, of, Subject, bufferTime, filter, fromEvent, map } from 'rxjs';
 import { SettingsService } from '@core/services/shared/settings.service';
 import { LocalMessage } from '@core/services/messages/models/messages.model';
 import { ObserveVisibilityDirective } from './observe-visibility.directive';
-import { DecryptMessagePipe } from './decrypt-message.pipe';
 import { LinkifyPipe } from './linkify.pipe';
 import { ConnectionStatus } from '../widgets/connection-status';
 import { MessagesService } from '@core/services/messages/messages.service';
@@ -40,6 +42,16 @@ interface DaySection {
   date: number;
   messages: LocalMessage[];
 }
+
+interface MessagePage {
+  messages: LocalMessage[];
+  contents: Map<string, string>; // messageId -> decrypted text / image data URL
+  limit: number;
+  hasMore: boolean;
+}
+
+/** Number of messages loaded initially and added on each scroll-up. */
+const PAGE_SIZE = 30;
 
 /** Encoding preset for chat photos: a larger edge and single quality. */
 const PHOTO_OPTIONS = {
@@ -67,7 +79,6 @@ const PAYLOAD_ENVELOPE_RESERVE = 4096;
     MatIconModule,
     RouterLink,
     ObserveVisibilityDirective,
-    DecryptMessagePipe,
     LinkifyPipe,
     CallLogPipe,
     TranslateModule,
@@ -90,17 +101,30 @@ export class ChatComponent {
   showBackButton = input<boolean>(true);
   settingsService = inject(SettingsService);
   locale = this.settingsService.locale;
-  messages = toSignal(
-    toObservable(this.conversationId).pipe(
-      switchMap((id) => {
-        if (id) {
-          return this.messagesService.observeMessages(id);
-        }
-        return of([]);
-      }),
+  // Resets to the first page whenever the conversation changes.
+  private pageLimit = linkedSignal({ source: this.conversationId, computation: () => PAGE_SIZE });
+
+  private page = toSignal(
+    toObservable(computed(() => ({ id: this.conversationId(), limit: this.pageLimit() }))).pipe(
+      switchMap(({ id, limit }) => id
+        ? this.messagesService.observeMessages(id, limit).pipe(map((msgs) => ({ msgs, limit })))
+        : of({ msgs: [] as LocalMessage[], limit })),
+      // Decrypt before rendering: iOS 26 Safari doesn't repaint images that grow the
+      // column-reverse scroll container after its initial layout.
+      switchMap(async ({ msgs, limit }): Promise<MessagePage> => ({
+        messages: msgs,
+        contents: await this.decryptPage(msgs),
+        limit,
+        hasMore: msgs.length === limit,
+      })),
     ),
-    { initialValue: [] },
+    { initialValue: { messages: [], contents: new Map(), limit: PAGE_SIZE, hasMore: false } },
   );
+
+  messages = computed(() => this.page().messages);
+  contents = computed(() => this.page().contents);
+  hasMore = computed(() => this.page().hasMore);
+  loadingMore = computed(() => this.page().limit !== this.pageLimit());
 
   // Live conversation header metadata (title, avatar). Re-emits when the conversation or its cached
   // profile/group metadata changes
@@ -313,6 +337,31 @@ export class ChatComponent {
       this.readQueue.next(msg);
     }
     this.pendingReads.clear();
+  }
+
+  loadMore(): void {
+    this.pageLimit.update((limit) => limit + PAGE_SIZE);
+  }
+
+  /** Decrypts only messages not already decrypted for the previous page. */
+  private async decryptPage(msgs: LocalMessage[]): Promise<Map<string, string>> {
+    const previous = this.page().contents;
+    const entries = await Promise.all(msgs.map(async (m): Promise<[string, string]> => {
+      const cached = previous.get(m.id);
+      if (cached !== undefined) {
+        return [m.id, cached];
+      }
+      if (m.kind === 'system' || !m.text) {
+        return [m.id, ''];
+      }
+      try {
+        return [m.id, await this.messagesService.decryptFromAtRest(m.id, m.text)];
+      } catch (e) {
+        console.error('Failed to decrypt message in UI:', e);
+        return [m.id, '**(Encrypted)**'];
+      }
+    }));
+    return new Map(entries);
   }
 
   messageAvatar(senderId: string): string | undefined {

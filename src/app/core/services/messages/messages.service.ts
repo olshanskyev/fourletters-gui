@@ -479,10 +479,10 @@ export class MessagesService {
   }
 
   /**
-   * Observe messages for a specific conversation to populate the chat view
+   * Observe the newest {@code limit} messages of a conversation to populate the chat view
    */
-  observeMessages(conversationId: string): Observable<LocalMessage[]> {
-    return this.repository.observeMessagesByConversation(conversationId);
+  observeMessages(conversationId: string, limit: number): Observable<LocalMessage[]> {
+    return this.repository.observeLatestMessages(conversationId, limit);
   }
 
   /**
