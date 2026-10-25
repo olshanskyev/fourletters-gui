@@ -35,7 +35,7 @@ class FakeGroupKeyStore {
   }
 }
 
-/** A group Sender-Key wire envelope (`4.<base64 JSON>`). */
+/** A group Sender-Key wire envelope (`4.<JSON>`). */
 interface GroupEnvelope {
   e: number;
   i: number;
@@ -57,9 +57,9 @@ function makeCipher(): GroupCipherService {
 
 /** Decode a wire payload, mutate the envelope, and re-encode it (to craft tampered inputs). */
 function tamper(payload: string, mutate: (env: GroupEnvelope) => void): string {
-  const env: GroupEnvelope = JSON.parse(atob(payload.slice(payload.indexOf('.') + 1)));
+  const env: GroupEnvelope = JSON.parse(payload.slice(payload.indexOf('.') + 1));
   mutate(env);
-  return `4.${btoa(JSON.stringify(env))}`;
+  return `4.${JSON.stringify(env)}`;
 }
 
 describe('GroupCipherService', () => {
@@ -92,6 +92,20 @@ describe('GroupCipherService', () => {
     const payload = await alice.encrypt(GROUP, EPOCH, 'hello group');
     expect(alice.isGroupPayload(payload)).toBe(true);
     await expect(bob.decrypt(ALICE, GROUP, payload)).resolves.toBe('hello group');
+  });
+
+  it('encodes the envelope once (no outer base64 layer)', async () => {
+    await distribute();
+    const payload = await alice.encrypt(GROUP, EPOCH, 'x'.repeat(30_000));
+    const env: GroupEnvelope = JSON.parse(payload.slice(2));
+    expect(payload.length).toBeLessThan(env.c.length + 512);
+  });
+
+  it('still decrypts a legacy base64-wrapped envelope', async () => {
+    await distribute();
+    const payload = await alice.encrypt(GROUP, EPOCH, 'legacy');
+    const legacy = `4.${btoa(payload.slice(2))}`;
+    await expect(bob.decrypt(ALICE, GROUP, legacy)).resolves.toBe('legacy');
   });
 
   it('decrypts consecutive in-order messages', async () => {

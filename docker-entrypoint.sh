@@ -13,6 +13,12 @@ if [ -f /etc/nginx/conf.d/default.conf ]; then
   fi
 fi
 
+# One message size budget shared with the Server/Hub; nginx adds headroom for the JSON envelope.
+MESSAGE_MAX_PAYLOAD_BYTES="${MESSAGE_MAX_PAYLOAD_BYTES:-4194304}"
+MESSAGES_MAX_BODY_BYTES=$((MESSAGE_MAX_PAYLOAD_BYTES + 1048576))
+export MESSAGE_MAX_PAYLOAD_BYTES MESSAGES_MAX_BODY_BYTES
+SUBSTITUTE_VARS="$SUBSTITUTE_VARS MESSAGE_MAX_PAYLOAD_BYTES MESSAGES_MAX_BODY_BYTES"
+
 # Replace placeholders of the form __VAR__ in the runtime config and nginx config.
 # List the variable names (space separated) in SUBSTITUTE_VARS.
 #

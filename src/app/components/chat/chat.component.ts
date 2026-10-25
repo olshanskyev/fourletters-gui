@@ -33,6 +33,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { callErrorKey } from '@components/call/call-utils';
 import { CallLogPipe } from './call-log.pipe';
 import { ChatStatusComponent } from './chat-status/chat-status.component';
+import { environment } from '@env/environment';
 
 interface DaySection {
   id: string;
@@ -40,12 +41,14 @@ interface DaySection {
   messages: LocalMessage[];
 }
 
-/** Encoding preset for chat photos: a larger edge and single quality, capped near the server limit. */
+/** Encoding preset for chat photos: a larger edge and single quality. */
 const PHOTO_OPTIONS = {
   maxDimension: 1280,
   qualitySteps: [0.7],
-  maxDataUrlLength: 10 * 1024 * 1024,
 };
+
+/** Bytes reserved for the encryption envelope (headers, IV, signature, JSON) beyond base64. */
+const PAYLOAD_ENVELOPE_RESERVE = 4096;
 
 @Component({
   selector: 'app-chat',
@@ -259,7 +262,11 @@ export class ChatComponent {
     if (!file || !convoId) return;
 
     try {
-      const dataUrl = await compressImageToDataUrl(file, PHOTO_OPTIONS);
+      // The encrypted payload is base64 (4/3 of the plaintext), so size the photo to fit the cap.
+      const maxDataUrlLength = Math.floor(
+        (environment.maxMessagePayloadBytes - PAYLOAD_ENVELOPE_RESERVE) * 3 / 4
+      );
+      const dataUrl = await compressImageToDataUrl(file, { ...PHOTO_OPTIONS, maxDataUrlLength });
       await this.messagesService.sendMessage(convoId, dataUrl, 'image');
     } catch (e) {
       console.error('Failed to send photo', e);

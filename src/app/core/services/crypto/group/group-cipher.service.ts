@@ -123,7 +123,7 @@ export class GroupCipherService {
     await this.store.putPeerKey(record);
   }
 
-  /** Encrypt plaintext once with this device's Sender Key; returns the wire payload `4.<b64>`. */
+  /** Encrypt plaintext once with this device's Sender Key; returns the wire payload `4.<json>`. */
   async encrypt(groupId: string, epoch: number, plaintext: string): Promise<string> {
     const sk = await this.getOrCreateSenderKey(groupId, epoch);
     const iteration = sk.iteration;
@@ -150,14 +150,17 @@ export class GroupCipherService {
       iv: Base64.bufferToBase64(iv.buffer),
       s: Base64.bufferToBase64(signature)
     };
-    return `${GROUP_PAYLOAD_TYPE}.${btoa(JSON.stringify(env))}`;
+    // The envelope is already ASCII (base64 fields); a second base64 layer would add ~33%.
+    return `${GROUP_PAYLOAD_TYPE}.${JSON.stringify(env)}`;
   }
 
   /** Decrypt a group Sender-Key payload from a peer; throws GroupUndecryptableError if unreadable. */
   async decrypt(senderId: string, groupId: string, payload: string): Promise<string> {
     let env: { e: number; i: number; c: string; iv: string; s: string };
     try {
-      env = JSON.parse(atob(payload.slice(payload.indexOf('.') + 1)));
+      const body = payload.slice(payload.indexOf('.') + 1);
+      // Legacy senders base64-encoded the JSON envelope (`4.<base64 json>`).
+      env = JSON.parse(body.startsWith('{') ? body : atob(body));
     } catch (err) {
       throw new GroupUndecryptableError(senderId, groupId, err);
     }

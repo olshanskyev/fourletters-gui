@@ -11,5 +11,6 @@ export const environment = {
   standalone: false,
   umamiWebsiteId: '',
   vapidPublicKey: '',
-  stunUrls: ''
+  stunUrls: '',
+  maxMessagePayloadBytes: 4194304
 };
