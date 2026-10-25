@@ -102,6 +102,10 @@ export class UserDatabase extends Dexie {
       signalSessions: 'id',
       signalRemoteIdentities: 'id'
     });
+
+    this.version(2).stores({
+      messages: 'id, conversationId, createdAt, status, [conversationId+createdAt]',
+    });
   }
 }
 

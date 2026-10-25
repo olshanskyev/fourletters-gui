@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { AppDatabase } from '@core/services/database/app.database';
 import { LocalMessage } from './models/messages.model';
-import { liveQuery } from 'dexie';
+import Dexie, { liveQuery } from 'dexie';
 import { from, Observable } from 'rxjs';
 
 @Injectable({
@@ -112,11 +112,18 @@ export class MessagesRepository {
   }
 
   /**
-   * Get live updating stream of messages for a specific conversation
+   * Live stream of the newest {@code limit} messages of a conversation, oldest first.
    */
-  observeMessagesByConversation(conversationId: string): Observable<LocalMessage[]> {
-    return from(
-      liveQuery(() => this.db.messages.where('conversationId').equals(conversationId).sortBy('createdAt'))
-    );
+  observeLatestMessages(conversationId: string, limit: number): Observable<LocalMessage[]> {
+    return from(liveQuery(async () => {
+      const newestFirst = await this.db.messages
+        .where('[conversationId+createdAt]')
+        .between([conversationId, Dexie.minKey], [conversationId, Dexie.maxKey])
+        .reverse()
+        .limit(limit)
+        .toArray();
+      // Copy first: Dexie's liveQuery cache may hand this same array out again for this query.
+      return newestFirst.slice().reverse();
+    }));
   }
 }
