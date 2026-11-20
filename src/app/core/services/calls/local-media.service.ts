@@ -17,7 +17,7 @@ export class LocalMediaService {
   /** Open microphone (and camera); the stream is the call's only after {@link use}. */
   async open(media: CallMedia): Promise<MediaStream> {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: media === 'video' ? { facingMode: this.facingMode } : false
     });
     if (media === 'video') {

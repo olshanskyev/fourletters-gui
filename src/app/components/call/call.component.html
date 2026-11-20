@@ -42,9 +42,9 @@
         class="local-video"
         [class.camera-off]="media.cameraOff()"
         [srcObject]="media.localStream()"
+        [muted]="true"
         autoplay
         playsinline
-        muted
       ></video>
     }
 
