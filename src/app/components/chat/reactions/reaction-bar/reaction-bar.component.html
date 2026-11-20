@@ -1,0 +1,15 @@
+<div class="reaction-bar d-flex align-items-center p-x-4 p-y-4" role="toolbar"
+  [attr.aria-label]="'reactions' | translate">
+  @for (emoji of emojis; track emoji) {
+    <button
+      matIconButton
+      type="button"
+      class="reaction-option"
+      [class.current]="emoji === current()"
+      [attr.aria-pressed]="emoji === current()"
+      (click)="picked.emit(emoji)"
+    >
+      {{ emoji }}
+    </button>
+  }
+</div>

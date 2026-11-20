@@ -10,12 +10,14 @@
 
 
 /**
- * Plaintext delivery hint set by the sender. The Server uses it only to choose the push notification wording and timing: \'message\' = a chat message (default when omitted); \'call\' = a call offer.
+ * Plaintext delivery hint set by the sender. The Server uses it only to choose the push notification wording and timing: \'message\' = a chat message (default when omitted); \'call\' = a call offer; \'reaction\' = a message reaction.
  */
 export enum MessageHint {
 
     Message = 'message',
 
-    Call = 'call'
+    Call = 'call',
+
+    Reaction = 'reaction'
 }
 

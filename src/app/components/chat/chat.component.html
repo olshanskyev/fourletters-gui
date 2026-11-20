@@ -59,6 +59,7 @@
   }
 
   <div body class="h-full">
+    <app-reaction-picker />
     @if (!conversationId()) {
       <div class="notification-container">
         <p>Select a conversation to start messaging</p>
@@ -116,6 +117,7 @@
 
                   <div
                     class="message-bubble"
+                    [appMessageSelect]="msg"
                     [appObserveVisibility]="!msg.isMine && msg.status !== 'read'"
                     (visible)="onMessageVisible(msg)"
                     [class.mine]="msg.isMine"
@@ -156,8 +158,8 @@
                       </div>
                     }
                     <div class="bubble-footer">
-                      <div></div>
-                      <div class="message-status">
+                      <app-message-reactions [message]="msg" />
+                      <div class="message-status align-items-end">
                         <span class="opacity-60">{{
                           msg.createdAt | date: 'shortTime' : '' : locale()
                         }}</span>

@@ -47,12 +47,14 @@ export class MessagesApiService {
   sendGroupMessage(
     groupId: string,
     payload: string,
-    messageId: string = crypto.randomUUID()
+    messageId: string = crypto.randomUUID(),
+    hint?: MessageHint
   ): Observable<AcceptedResponse> {
     const message: EncryptedMessage = {
       messageId,
       payload,
-      groupId
+      groupId,
+      ...(hint ? { hint } : {})
     };
     return this.httpClient.post<AcceptedResponse>('/messages', message);
   }

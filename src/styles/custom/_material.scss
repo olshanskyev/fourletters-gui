@@ -1,4 +1,5 @@
 @use '@angular/material' as mat;
+@use '../grid/breakpoints' as bp;
 
 /** Rewrite Material styles */
 .form-field-5 {
@@ -36,5 +37,19 @@ mat-form-field.message-input {
 /* Keep bottom-positioned snackbars clear of the iOS home-indicator safe area. */
 .snackbar-safe-area {
   margin-bottom: env(safe-area-inset-bottom) !important;
+}
+
+/* Narrow screens: a full-width pane can't align to the bubble, so CDK pushes it to the screen
+   edges and the reaction bar is centered inside it. */
+@include bp.bp-lt(small) {
+  .reaction-bar-pane {
+    justify-content: center;
+    width: 100vw;
+    pointer-events: none;
+
+    > * {
+      pointer-events: auto;
+    }
+  }
 }
 

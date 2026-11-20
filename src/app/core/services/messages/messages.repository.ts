@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { AppDatabase } from '@core/services/database/app.database';
 import { LocalMessage } from './models/messages.model';
+import { MessageReaction } from './models/reactions.model';
 import Dexie, { liveQuery } from 'dexie';
 import { from, Observable } from 'rxjs';
 
@@ -56,6 +57,30 @@ export class MessagesRepository {
       // Accepted: clear the delivery-attempt counter so the post-restart re-push branch is eligible.
       msg.retryCount = 0;
       await this.db.messages.put(msg);
+    });
+  }
+
+  /**
+   * Atomically set a reactor's reaction on a message (undefined clears it). Unless forced, a
+   * reaction older than the stored one is ignored. Returns whether it was applied.
+   */
+  async setReaction(
+    id: string, reactorId: string, reaction: MessageReaction | undefined, force = false
+  ): Promise<boolean> {
+    return this.db.transaction(this.db.messages, async () => {
+      const msg = await this.db.messages.get(id);
+      if (!msg) return false;
+      const current = msg.reactions?.[reactorId];
+      if (!force && current && reaction && current.ts >= reaction.ts) return false;
+      const reactions = { ...msg.reactions };
+      if (reaction) {
+        reactions[reactorId] = reaction;
+      } else {
+        delete reactions[reactorId];
+      }
+      msg.reactions = reactions;
+      await this.db.messages.put(msg);
+      return true;
     });
   }
 

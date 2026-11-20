@@ -35,6 +35,9 @@ import { TranslateService } from '@ngx-translate/core';
 import { callErrorKey } from '@components/call/call-utils';
 import { CallLogPipe } from './call-log.pipe';
 import { ChatStatusComponent } from './chat-status/chat-status.component';
+import { MessageSelectDirective } from './reactions/message-select.directive';
+import { MessageReactionsComponent } from './reactions/message-reactions/message-reactions.component';
+import { ReactionPickerComponent } from './reactions/reaction-picker/reaction-picker.component';
 import { environment } from '@env/environment';
 
 interface DaySection {
@@ -114,6 +117,9 @@ const PAYLOAD_ENVELOPE_RESERVE = 4096;
     MatMenuModule,
     ConnectionStatus,
     ChatStatusComponent,
+    MessageSelectDirective,
+    MessageReactionsComponent,
+    ReactionPickerComponent,
   ],
 })
 export class ChatComponent {

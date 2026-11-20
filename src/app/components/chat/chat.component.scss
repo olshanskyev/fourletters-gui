@@ -97,7 +97,11 @@ app-chat-layout {
     height: auto;
     max-height: var(--message-image-max-height);
     cursor: pointer;
+    user-select: none;
     border-radius: var(--mat-sys-corner-medium);
+    // iOS: no drag-lift preview or callout on long-press, which would hide the reaction bar.
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
   }
 
   &.has-image {
