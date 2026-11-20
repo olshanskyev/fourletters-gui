@@ -43,15 +43,43 @@ interface DaySection {
   messages: LocalMessage[];
 }
 
+interface ImageSize {
+  width: number; // display width in px
+  aspectRatio: string;
+}
+
 interface MessagePage {
   messages: LocalMessage[];
   contents: Map<string, string>; // messageId -> decrypted text / image data URL
+  imageSizes: Map<string, ImageSize>; // messageId -> display size of an image message
   limit: number;
   hasMore: boolean;
 }
 
 /** Number of messages loaded initially and added on each scroll-up. */
 const PAGE_SIZE = 30;
+
+/** Max displayed height of a chat image; also drives .message-image max-height in SCSS. */
+const MAX_IMAGE_HEIGHT = 320;
+
+/**
+ * Explicit image size, because iOS 26 Safari can lay an <img> out at 0x0 and never re-layout it
+ * once its intrinsic size becomes known.
+ */
+async function measureImage(src: string): Promise<ImageSize | undefined> {
+  const img = new Image();
+  img.src = src;
+  try {
+    await img.decode();
+  } catch {
+    return undefined;
+  }
+  const { naturalWidth: w, naturalHeight: h } = img;
+  if (!w || !h) {
+    return undefined;
+  }
+  return { width: Math.round(w * Math.min(1, MAX_IMAGE_HEIGHT / h)), aspectRatio: `${w} / ${h}` };
+}
 
 /** Encoding preset for chat photos: a larger edge and single quality. */
 const PHOTO_OPTIONS = {
@@ -68,6 +96,7 @@ const PAYLOAD_ENVELOPE_RESERVE = 4096;
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[style.--message-image-max-height.px]': 'maxImageHeight' },
   imports: [
     FormsModule,
     CommonModule,
@@ -84,10 +113,11 @@ const PAYLOAD_ENVELOPE_RESERVE = 4096;
     TranslateModule,
     MatMenuModule,
     ConnectionStatus,
-    ChatStatusComponent
+    ChatStatusComponent,
   ],
 })
 export class ChatComponent {
+  protected readonly maxImageHeight = MAX_IMAGE_HEIGHT;
   sidePanelService = inject(SidePanelService);
   messagesService = inject(MessagesService);
   private conversationsService = inject(ConversationsService);
@@ -109,20 +139,24 @@ export class ChatComponent {
       switchMap(({ id, limit }) => id
         ? this.messagesService.observeMessages(id, limit).pipe(map((msgs) => ({ msgs, limit })))
         : of({ msgs: [] as LocalMessage[], limit })),
-      // Decrypt before rendering: iOS 26 Safari doesn't repaint images that grow the
-      // column-reverse scroll container after its initial layout.
+      // Decrypt and measure before rendering, so the list renders complete in one pass.
       switchMap(async ({ msgs, limit }): Promise<MessagePage> => ({
         messages: msgs,
-        contents: await this.decryptPage(msgs),
+        ...(await this.decryptPage(msgs)),
         limit,
         hasMore: msgs.length === limit,
       })),
     ),
-    { initialValue: { messages: [], contents: new Map(), limit: PAGE_SIZE, hasMore: false } },
+    {
+      initialValue: {
+        messages: [], contents: new Map(), imageSizes: new Map(), limit: PAGE_SIZE, hasMore: false,
+      },
+    },
   );
 
   messages = computed(() => this.page().messages);
   contents = computed(() => this.page().contents);
+  imageSizes = computed(() => this.page().imageSizes);
   hasMore = computed(() => this.page().hasMore);
   loadingMore = computed(() => this.page().limit !== this.pageLimit());
 
@@ -343,25 +377,36 @@ export class ChatComponent {
     this.pageLimit.update((limit) => limit + PAGE_SIZE);
   }
 
-  /** Decrypts only messages not already decrypted for the previous page. */
-  private async decryptPage(msgs: LocalMessage[]): Promise<Map<string, string>> {
-    const previous = this.page().contents;
-    const entries = await Promise.all(msgs.map(async (m): Promise<[string, string]> => {
-      const cached = previous.get(m.id);
-      if (cached !== undefined) {
-        return [m.id, cached];
-      }
-      if (m.kind === 'system' || !m.text) {
-        return [m.id, ''];
-      }
-      try {
-        return [m.id, await this.messagesService.decryptFromAtRest(m.id, m.text)];
-      } catch (e) {
-        console.error('Failed to decrypt message in UI:', e);
-        return [m.id, '**(Encrypted)**'];
+  /** Decrypts (and measures images) only for messages not already handled by the previous page. */
+  private async decryptPage(
+    msgs: LocalMessage[],
+  ): Promise<Pick<MessagePage, 'contents' | 'imageSizes'>> {
+    const previous = this.page();
+    const contents = new Map<string, string>();
+    const imageSizes = new Map<string, ImageSize>();
+    await Promise.all(msgs.map(async (m) => {
+      const content = previous.contents.get(m.id) ?? await this.decryptContent(m);
+      contents.set(m.id, content);
+      if (m.contentType === 'image' && content) {
+        const size = previous.imageSizes.get(m.id) ?? await measureImage(content);
+        if (size) {
+          imageSizes.set(m.id, size);
+        }
       }
     }));
-    return new Map(entries);
+    return { contents, imageSizes };
+  }
+
+  private async decryptContent(m: LocalMessage): Promise<string> {
+    if (m.kind === 'system' || !m.text) {
+      return '';
+    }
+    try {
+      return await this.messagesService.decryptFromAtRest(m.id, m.text);
+    } catch (e) {
+      console.error('Failed to decrypt message in UI:', e);
+      return '**(Encrypted)**';
+    }
   }
 
   messageAvatar(senderId: string): string | undefined {
