@@ -1,0 +1,26 @@
+@if (groups().length) {
+  <div class="d-flex flex-wrap gap-4 m-r-8 p-y-2">
+    @for (group of groups(); track group.emoji) {
+      <span
+        class="reaction-chip d-flex align-items-center gap-4"
+        [class.mine]="group.mine"
+        [matTooltip]="names(group)"
+      >
+        <span class="reaction-emoji">{{ group.emoji }}</span>
+        <span class="reaction-avatars d-flex">
+          @for (id of group.reactorIds.slice(0, maxAvatars); track id) {
+            @let avatar = reactor(id)?.avatar;
+            @if (avatar) {
+              <img [src]="avatar" class="avatar" alt="" referrerpolicy="no-referrer" />
+            } @else {
+              <span class="avatar default-avatar"></span>
+            }
+          }
+        </span>
+        @if (group.reactorIds.length > maxAvatars) {
+          <span class="reaction-more">+{{ group.reactorIds.length - maxAvatars }}</span>
+        }
+      </span>
+    }
+  </div>
+}

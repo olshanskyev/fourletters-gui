@@ -1,0 +1,31 @@
+:host {
+  display: block;
+  white-space: normal;
+}
+
+.reaction-chip {
+  padding: 0.125rem 0.375rem 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  background-color: color-mix(in srgb, currentColor, transparent 85%);
+  border-radius: var(--mat-sys-corner-full);
+
+  &.mine {
+    background-color: color-mix(in srgb, currentColor, transparent 65%);
+  }
+}
+
+.reaction-emoji {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.reaction-avatars .avatar {
+  --avatar-size: 20px;
+  --background-size: 14px;
+
+  box-shadow: 0 0 0 1px currentColor;
+
+  & + .avatar {
+    margin-left: -6px;
+  }
+}

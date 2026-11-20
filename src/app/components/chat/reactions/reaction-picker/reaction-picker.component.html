@@ -1,0 +1,19 @@
+@if (selectedMessage(); as selected) {
+  <button
+    type="button"
+    class="reaction-backdrop"
+    [attr.aria-label]="'close' | translate"
+    (click)="close()"
+    (contextmenu)="$event.preventDefault(); close()"
+  ></button>
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="selected.element"
+    [cdkConnectedOverlayOpen]="true"
+    [cdkConnectedOverlayPositions]="positions()"
+    [cdkConnectedOverlayPush]="true"
+    cdkConnectedOverlayPanelClass="reaction-bar-pane"
+  >
+    <app-reaction-bar [current]="current()" (picked)="pick($event)" />
+  </ng-template>
+}

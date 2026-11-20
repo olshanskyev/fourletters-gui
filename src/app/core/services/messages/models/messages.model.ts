@@ -1,4 +1,5 @@
 import { CallDirection, CallMedia, CallOutcome } from '@core/services/calls/models/call.model';
+import { MessageReaction } from './reactions.model';
 
 export type MessageStatus = 'pending' | 'accepted' | 'delivered' | 'read' | 'failed';
 
@@ -27,6 +28,7 @@ interface BaseMessage {
   retryCount?: number; // delivery attempts: pending re-sends (failed after a budget) and the one post-restart re-push; reset to 0 on accept
   nackResent?: Set<string>; // recipientIds already re-keyed and resent once after an 'undecryptable' NACK
   cipher?: string; // exact wire ciphertext for idempotent resend
+  reactions?: Record<string, MessageReaction>; // reactorId -> latest reaction
 }
 
 /** A 1:1 message: routed to a single peer. */

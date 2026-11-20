@@ -21,6 +21,7 @@ import { SyncStateRepository } from './sync-state.repository';
 import { SecureMessageService, UndecryptableError } from './secure-message.service';
 import { GroupUndecryptableError } from '@core/services/crypto/group';
 import { CallService } from '@core/services/calls/call.service';
+import { ReactionsService } from './reactions.service';
 
 /** A receipt we owe the sender, queued so a whole batch can be acknowledged in one request. */
 interface PendingReceipt {
@@ -47,6 +48,7 @@ export class MessagesService {
   private syncState = inject(SyncStateRepository);
   private secureMsg = inject(SecureMessageService);
   private callService = inject(CallService);
+  private reactionsService = inject(ReactionsService);
 
   private incomingSubscription?: Subscription;
   private callSignalSubscription?: Subscription;
@@ -252,15 +254,19 @@ export class MessagesService {
       return [];
     }
 
+    const { senderId, messageId, groupId } = encryptedMessage;
+
+    if (ReactionsService.isReactionPayload(encryptedMessage.payload)) {
+      await this.reactionsService.applyIncoming(encryptedMessage);
+      return [{ messageId, senderId, type: ReceiptType.Delivered }];
+    }
+
     // De-duplicate: Ensure we don't save the same message again when unioning Hot and Cold tiers.
     // A duplicate means we stored it but the server never got our receipt
     const existing = await this.repository.hasMessage(encryptedMessage.messageId);
     if (existing) {
-      const { messageId, senderId } = encryptedMessage;
       return [await this.reacknowledgeStored(messageId, senderId)];
     }
-
-    const { senderId, messageId, groupId } = encryptedMessage;
 
     try {
       return groupId
