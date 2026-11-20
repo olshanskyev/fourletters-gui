@@ -125,8 +125,11 @@
                     @if (msg.contentType === 'image') {
                       @let src = contents().get(msg.id);
                       @if (src) {
+                        @let size = imageSizes().get(msg.id);
                         <img
                           [src]="src"
+                          [style.width.px]="size?.width"
+                          [style.aspect-ratio]="size?.aspectRatio"
                           class="message-image"
                           alt="photo"
                           role="button"
