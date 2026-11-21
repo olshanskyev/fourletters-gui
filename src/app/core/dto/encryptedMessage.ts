@@ -24,7 +24,7 @@ export interface EncryptedMessage {
      */
     senderId?: string;
     /**
-     * E2E encrypted ciphertext. Format \'<sessionType>.<bodyBase64>\'. sessionType is 1 (WhisperMessage, established pairwise session) or 3 (PreKeyWhisperMessage, establishes the pairwise session) for a 1:1 payload, or 4 (SenderKeyMessage) for a group payload encrypted once with the sender\'s per-group Sender Key. sessionType 0 is a plaintext reaction: \'0.{\"kind\":\"reaction\",\"target\":<messageId>,\"emoji\":<emoji or \'\'>,\"ts\":<epochMs>}\'.
+     * E2E encrypted ciphertext. Format \'<sessionType>.<bodyBase64>\'. sessionType is 1 (WhisperMessage, established pairwise session) or 3 (PreKeyWhisperMessage, establishes the pairwise session) for a 1:1 payload, or 4 (SenderKeyMessage) for a group payload encrypted once with the sender\'s per-group Sender Key. sessionType 0 is a plaintext reaction: \'0.{\"kind\":\"reaction\",\"target\":<messageId>,\"emoji\":<emoji or \'\'>,\"ts\":<epochMs>,\"notifyId\":<target author, the only member pushed; omitted for an own message>}\'.
      */
     payload: string;
     /**
