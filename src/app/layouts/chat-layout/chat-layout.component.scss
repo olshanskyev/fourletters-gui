@@ -27,6 +27,9 @@
   padding-top: calc(var(--header-height) + env(safe-area-inset-top));
   padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   scrollbar-gutter: stable both-edges;
+
+  // Don't let browser scroll anchoring move the view when older messages are added above.
+  overflow-anchor: none;
 }
 
 .layout-content-wrapper {

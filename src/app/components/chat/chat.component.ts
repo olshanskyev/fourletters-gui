@@ -1,6 +1,6 @@
 import {
   Component, computed, effect, inject, input, linkedSignal, resource, signal,
-  ChangeDetectionStrategy,
+  ChangeDetectionStrategy, ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatLayoutComponent } from '@layouts/chat-layout/chat-layout.component';
@@ -61,6 +61,12 @@ interface MessagePage {
 
 /** Number of messages loaded initially and added on each scroll-up. */
 const PAGE_SIZE = 30;
+
+/** Index (oldest first) of the loaded message whose visibility loads the next page. */
+const LOAD_MORE_AHEAD = 5;
+
+/** No scroll events for this long means the user's scroll (wheel animation, momentum) has ended. */
+const SCROLL_IDLE_MS = 150;
 
 /** Max displayed height of a chat image; also drives .message-image max-height in SCSS. */
 const MAX_IMAGE_HEIGHT = 320;
@@ -132,6 +138,7 @@ export class ChatComponent {
   private callService = inject(CallService);
   private toast = inject(HotToastService);
   private translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly callActive = computed(() => !!this.callService.activeCall());
   conversationId = input<string | undefined>(undefined);
   showBackButton = input<boolean>(true);
@@ -146,12 +153,15 @@ export class ChatComponent {
         ? this.messagesService.observeMessages(id, limit).pipe(map((msgs) => ({ msgs, limit })))
         : of({ msgs: [] as LocalMessage[], limit })),
       // Decrypt and measure before rendering, so the list renders complete in one pass.
-      switchMap(async ({ msgs, limit }): Promise<MessagePage> => ({
-        messages: msgs,
-        ...(await this.decryptPage(msgs)),
-        limit,
-        hasMore: msgs.length === limit,
-      })),
+      switchMap(async ({ msgs, limit }): Promise<MessagePage> => {
+        const decrypted = await this.decryptPage(msgs);
+        if (limit > this.page().limit) {
+          // An older page added during a running scroll (wheel animation, momentum) makes the
+          // browser finish that scroll from a stale offset, jumping a whole page up.
+          await this.scrollIdle();
+        }
+        return { messages: msgs, ...decrypted, limit, hasMore: msgs.length === limit };
+      }),
     ),
     {
       initialValue: {
@@ -165,6 +175,10 @@ export class ChatComponent {
   imageSizes = computed(() => this.page().imageSizes);
   hasMore = computed(() => this.page().hasMore);
   loadingMore = computed(() => this.page().limit !== this.pageLimit());
+  canLoadMore = computed(() => this.hasMore() && !this.loadingMore());
+  loadMoreTriggerId = computed(
+    () => this.canLoadMore() ? this.messages()[LOAD_MORE_AHEAD]?.id : undefined,
+  );
 
   // Live conversation header metadata (title, avatar). Re-emits when the conversation or its cached
   // profile/group metadata changes
@@ -279,7 +293,6 @@ export class ChatComponent {
         this.messagesService.reconcileUnreadCount(id);
       }
     });
-
   }
 
   messageText = signal<string>('');
@@ -381,6 +394,26 @@ export class ChatComponent {
 
   loadMore(): void {
     this.pageLimit.update((limit) => limit + PAGE_SIZE);
+  }
+
+  /** Resolves once the message list has had no scroll events for SCROLL_IDLE_MS. */
+  private scrollIdle(): Promise<void> {
+    const scroller = this.host.nativeElement.querySelector('.scroll-container');
+    if (!scroller) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const done = (): void => {
+        scroller.removeEventListener('scroll', restart);
+        resolve();
+      };
+      let timer = setTimeout(done, SCROLL_IDLE_MS);
+      const restart = (): void => {
+        clearTimeout(timer);
+        timer = setTimeout(done, SCROLL_IDLE_MS);
+      };
+      scroller.addEventListener('scroll', restart, { passive: true });
+    });
   }
 
   /** Decrypts (and measures images) only for messages not already handled by the previous page. */
