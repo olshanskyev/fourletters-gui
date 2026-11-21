@@ -67,9 +67,6 @@
     } @else {
       @if (messages().length > 0) {
         <div class="d-flex flex-col justify-content-end p-b-4 h-full">
-          @if (hasMore() && !loadingMore()) {
-            <div class="p-t-2" [appObserveVisibility]="true" (visible)="loadMore()"></div>
-          }
           @for (day of timeline(); track day.id) {
             <section class="d-flex flex-col gap-8">
               <div class="date-separator">
@@ -77,7 +74,11 @@
               </div>
               @for (msg of day.messages; track msg.id) {
                 @if (msg.kind === 'system') {
-                  <div class="system-message">
+                  <div
+                    class="system-message"
+                    [appObserveVisibility]="msg.id === loadMoreTriggerId()"
+                    (visible)="loadMore()"
+                  >
                     @if (msg.systemType === 'call' && msg.call; as call) {
                       @let log = call | callLog;
                       <span
@@ -100,7 +101,13 @@
                     }
                   </div>
                 } @else {
-                  <div class="message-row" [class.mine]="msg.isMine" [class.theirs]="!msg.isMine">
+                  <div
+                    class="message-row"
+                    [appObserveVisibility]="msg.id === loadMoreTriggerId()"
+                    (visible)="loadMore()"
+                    [class.mine]="msg.isMine"
+                    [class.theirs]="!msg.isMine"
+                  >
                   @if (isGroupConversation() && !msg.isMine) {
                     @let avatar = messageAvatar(msg.senderId);
                     @if (avatar) {
