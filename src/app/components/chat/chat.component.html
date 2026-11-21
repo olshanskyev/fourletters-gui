@@ -148,7 +148,7 @@
                         />
                       }
                     } @else {
-                      <div>
+                      <div translate="no" class="notranslate">
                         @for (part of (contents().get(msg.id) | linkify); track $index) {
                           @if (part.href) {
                             <a
@@ -159,7 +159,7 @@
                               >{{ part.text }}</a
                             >
                           } @else {
-                            {{ part.text }}
+                            <ng-container>{{ part.text }}</ng-container>
                           }
                         }
                       </div>
