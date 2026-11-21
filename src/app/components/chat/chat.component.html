@@ -148,7 +148,7 @@
                         />
                       }
                     } @else {
-                      <div translate="no" class="notranslate">
+                      <div [attr.translate]="'no'" class="notranslate">
                         @for (part of (contents().get(msg.id) | linkify); track $index) {
                           @if (part.href) {
                             <a
