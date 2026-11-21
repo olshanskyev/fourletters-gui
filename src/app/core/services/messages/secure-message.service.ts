@@ -2,8 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { CryptoService } from '@core/services/crypto';
 import { SignalSessionService } from '@core/services/crypto/signal';
 import { GroupCipherService, SenderKeyDistribution } from '@core/services/crypto/group';
-import { MessagesRepository } from './messages.repository';
-import { MessageContent, MessageContentType } from './models/messages.model';
+import { LocalMessage, MessageContent, MessageContentType } from './models/messages.model';
 import { ContactsService } from '@core/services/contacts';
 import { IdentityService } from '@core/services/identity';
 import { AuthService } from '@core/services/authentication/auth.service';
@@ -65,7 +64,6 @@ export class SecureMessageService {
   private crypto = inject(CryptoService);
   private signal = inject(SignalSessionService);
   private groupCipher = inject(GroupCipherService);
-  private messagesRepo = inject(MessagesRepository);
   private contacts = inject(ContactsService);
   private identity = inject(IdentityService);
   private authService = inject(AuthService);
@@ -290,10 +288,10 @@ export class SecureMessageService {
   }
 
   /**
-   * Verifies the Curve25519 signature on an incoming Delivery/Read receipt.
+   * Verifies the Curve25519 signature on an incoming Delivery/Read receipt for our own message.
    */
   async verifyReceipt(
-    messageId: string,
+    originalMessage: LocalMessage,
     type: string,
     receiptSenderId: string,
     signature: string
@@ -305,12 +303,6 @@ export class SecureMessageService {
     }
 
     // Security check: ensure the receipt is actually from the person we sent the message to
-    const originalMessage = await this.messagesRepo.getMessageById(messageId);
-    if (!originalMessage || !originalMessage.isMine) {
-      console.warn(`Cannot verify receipt: outgoing message ${messageId} not found in local outbox.`);
-      return false;
-    }
-
     if (originalMessage.kind === 'group') {
       // Group message: any current member may legitimately acknowledge — authorize by roster membership.
       const isMember = await this.groups.isMember(originalMessage.groupId, receiptSenderId);
@@ -323,7 +315,7 @@ export class SecureMessageService {
       return false;
     }
 
-    const payload = `${messageId}:${type}:${myId}`; // Our ID (the original sender)
+    const payload = `${originalMessage.id}:${type}:${myId}`; // Our ID (the original sender)
     return this.verifyWithPin(receiptSenderId, payload, signature); // The sender of the receipt
   }
 

@@ -237,8 +237,13 @@ export class MessagesService {
   }
 
   private async checkReceiptSignature(receipt: ReceiptData): Promise<boolean> {
+    // Receipts for messages never stored locally (reactions, SKDMs) have nothing to update.
+    const original = await this.repository.getMessageById(receipt.messageId);
+    if (!original?.isMine) {
+      return false;
+    }
     const valid = await this.secureMsg.verifyReceipt(
-        receipt.messageId, receipt.type, receipt.recipientId, receipt.signature
+        original, receipt.type, receipt.recipientId, receipt.signature
     );
     if (!valid) {
       // Single drop point, so no caller silently ignores a rejected receipt.
