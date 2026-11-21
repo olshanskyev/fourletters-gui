@@ -31,7 +31,10 @@ export class ReactionsService {
     const previous = message.reactions?.[myId];
     const next = previous?.emoji === emoji ? '' : emoji;
     const ts = Date.now();
-    const payload: ReactionPayload = { kind: 'reaction', target: message.id, emoji: next, ts };
+    const payload: ReactionPayload = {
+      kind: 'reaction', target: message.id, emoji: next, ts,
+      ...(message.isMine ? {} : { notifyId: message.senderId }),
+    };
     await this.repository.setReaction(message.id, myId, { emoji: next, ts }, true);
 
     const body = REACTION_PAYLOAD_PREFIX + JSON.stringify(payload);

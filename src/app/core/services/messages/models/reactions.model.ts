@@ -10,6 +10,7 @@ export interface ReactionPayload {
   target: string;
   emoji: string;
   ts: number;
+  notifyId?: string; // target message's author, the only member pushed
 }
 
 export const REACTION_PAYLOAD_PREFIX = '0.';

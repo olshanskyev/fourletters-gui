@@ -65,7 +65,7 @@ describe('ReactionsService', () => {
   });
 
   describe('react', () => {
-    it('sends a direct reaction to the peer with the reaction hint', async () => {
+    it('sends a direct reaction to the peer, pushing the message author', async () => {
       await service.react(direct(), '👍');
 
       const [peer, payload, , groupId, hint] = api.sendMessage.mock.calls[0];
@@ -74,25 +74,27 @@ describe('ReactionsService', () => {
       expect(hint).toBe(MessageHint.Reaction);
       expect((payload as string).startsWith('0.')).toBe(true);
       expect(sentPayload(api.sendMessage)).toMatchObject(
-        { kind: 'reaction', target: 'msg-1', emoji: '👍' }
+        { kind: 'reaction', target: 'msg-1', emoji: '👍', notifyId: PEER }
       );
       expect(repository.setReaction).toHaveBeenCalledWith(
         'msg-1', ME, expect.objectContaining({ emoji: '👍' }), true
       );
     });
 
-    it('targets the recipient when reacting to an own direct message', async () => {
+    it('targets the recipient and pushes no one when reacting to an own message', async () => {
       await service.react(direct({ isMine: true, senderId: ME, recipientId: PEER }), '🔥');
 
       expect(api.sendMessage.mock.calls[0][0]).toBe(PEER);
+      expect(sentPayload(api.sendMessage).notifyId).toBeUndefined();
     });
 
-    it('sends a group reaction once to the group', async () => {
+    it('sends a group reaction once to the group, pushing the message author', async () => {
       await service.react(group(), '🎉');
 
       const [groupId, , , hint] = api.sendGroupMessage.mock.calls[0];
       expect(groupId).toBe(GROUP);
       expect(hint).toBe(MessageHint.Reaction);
+      expect(sentPayload(api.sendGroupMessage).notifyId).toBe(PEER);
     });
 
     it('removes the reaction when the same emoji is picked again', async () => {
