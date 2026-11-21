@@ -1,4 +1,6 @@
-import { Directive, ElementRef, OnDestroy, computed, inject, input } from '@angular/core';
+import {
+  Directive, ElementRef, OnDestroy, computed, effect, inject, input,
+} from '@angular/core';
 import { LocalMessage } from '@core/services/messages/models/messages.model';
 import { MessageSelectionService } from './message-selection.service';
 
@@ -41,6 +43,12 @@ export class MessageSelectDirective implements OnDestroy {
     this.host.nativeElement.addEventListener('click', this.onClick, true);
     // Suppresses the iOS long-press callout that would cover the reaction bar.
     this.host.nativeElement.style.setProperty('-webkit-touch-callout', 'none');
+    // Unlock once the message is deselected.
+    effect(() => {
+      if (!this.selected()) {
+        this.lockTextSelection(false);
+      }
+    });
   }
 
   onPointerDown(event: PointerEvent): void {
@@ -50,6 +58,9 @@ export class MessageSelectDirective implements OnDestroy {
       return;
     }
     this.pressStart = { x: event.clientX, y: event.clientY };
+    // Must be set before OS starts its own long-press text selection, whose markers and menu
+    // would draw over the reaction bar.
+    this.lockTextSelection(true);
     clearTimeout(this.pressTimer);
     this.pressTimer = setTimeout(() => {
       this.suppressClick = true;
@@ -69,6 +80,15 @@ export class MessageSelectDirective implements OnDestroy {
   cancelPress(): void {
     clearTimeout(this.pressTimer);
     this.pressStart = undefined;
+    if (!this.selected()) {
+      this.lockTextSelection(false);
+    }
+  }
+
+  private lockTextSelection(lock: boolean): void {
+    const style = this.host.nativeElement.style;
+    style.setProperty('-webkit-user-select', lock ? 'none' : '');
+    style.setProperty('user-select', lock ? 'none' : '');
   }
 
   onContextMenu(event: MouseEvent): void {
